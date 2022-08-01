@@ -2,6 +2,8 @@ package game
 
 import (
 	"errors"
+	"tic-tac-toe/game/mark"
+	"tic-tac-toe/game/player"
 )
 
 // - X always goes first
@@ -14,28 +16,13 @@ var (
 	ErrInvalidIndex    = errors.New(`invalid cell index: must be in range 0 - 8`)
 )
 
-type Player struct {
-	Name      string
-	Mark      Mark
-	FirstTurn bool
-}
-
-type Mark string
-
-const (
-	X Mark = "x"
-	O Mark = "o"
-
-	None Mark = "-"
-)
-
-type Field [9]Mark
+type Field [9]mark.Mark
 
 func Start(p1Name, p2Name string) *Game {
-	players := make(map[string]*Player)
+	players := make(map[string]*player.Player)
 
-	players[p1Name] = &Player{Name: p1Name, Mark: X, FirstTurn: true}
-	players[p2Name] = &Player{Name: p2Name, Mark: O, FirstTurn: false}
+	players[p1Name] = &player.Player{Name: p1Name, Mark: mark.X, FirstTurn: true}
+	players[p2Name] = &player.Player{Name: p2Name, Mark: mark.O, FirstTurn: false}
 
 	return &Game{
 		players: players,
@@ -45,7 +32,7 @@ func Start(p1Name, p2Name string) *Game {
 }
 
 type Game struct {
-	players map[string]*Player
+	players map[string]*player.Player
 	grid    *grid
 	tm      *turnManager
 }
@@ -53,7 +40,7 @@ type Game struct {
 type TurnResult struct {
 	IsFinal bool
 	Err     error
-	Winner  Player
+	Winner  player.Player
 }
 
 func (g *Game) MakeTurn(cellIndex int, playerName string) TurnResult {
@@ -112,20 +99,20 @@ func (g *Game) playerExists(name string) bool {
 	return exists
 }
 
-func (g *Game) getPlayerMark(name string) Mark {
+func (g *Game) getPlayerMark(name string) mark.Mark {
 	p, found := g.players[name]
 	if !found {
-		return None
+		return mark.None
 	}
 
 	return p.Mark
 }
 
 // return ptr here?
-func (g *Game) getPlayer(name string) Player {
+func (g *Game) getPlayer(name string) player.Player {
 	p, ok := g.players[name]
 	if !ok {
-		return Player{}
+		return player.Player{}
 	}
 
 	return *p
@@ -137,8 +124,8 @@ func (g *Game) isWin(playerName string) bool {
 	}
 
 	var (
-		in   = g.grid.data
-		mark = g.getPlayerMark(playerName)
+		in = g.grid.data
+		m  = g.getPlayerMark(playerName)
 	)
 
 	for _, winIndexes := range winCombos {
@@ -152,11 +139,11 @@ func (g *Game) isWin(playerName string) bool {
 			continue
 		}
 
-		if mark == X && temp == winX {
+		if m == mark.X && temp == winX {
 			return true
 		}
 
-		if mark == O && temp == winO {
+		if m == mark.O && temp == winO {
 			return true
 		}
 	}
@@ -178,7 +165,7 @@ func (g *Game) makeWinResult(playerName string) TurnResult {
 
 func newGrid() *grid {
 	fld := Field{}
-	fld.initNone()
+	fld.InitNone()
 	return &grid{data: fld}
 }
 
@@ -186,25 +173,25 @@ type grid struct {
 	data Field
 }
 
-func (g *grid) placeMark(i int, m Mark) error {
+func (g *grid) placeMark(i int, m mark.Mark) error {
 	g.data[i] = m
 	return nil
 }
 
-func (g *grid) isEligiblePlacement(i int, m Mark) error {
+func (g *grid) isEligiblePlacement(i int, m mark.Mark) error {
 	if i > len(Field{})-1 {
 		return ErrInvalidIndex
 	}
 
-	if g.data[i] != None {
+	if g.data[i] != mark.None {
 		return ErrCellOccupied
 	}
 	return nil
 }
 
 const (
-	player1Mark = X
-	player2Mark = O
+	player1Mark = mark.X
+	player2Mark = mark.O
 )
 
 func newTurnManager() *turnManager {
@@ -215,18 +202,18 @@ func newTurnManager() *turnManager {
 }
 
 type turnManager struct {
-	nextMark    Mark
+	nextMark    mark.Mark
 	currentTurn int
 }
 
-func (t *turnManager) makeTurn(m Mark) error {
+func (t *turnManager) makeTurn(m mark.Mark) error {
 	t.currentTurn++
 	t.switchNextMark()
 
 	return nil
 }
 
-func (t *turnManager) validateTurn(m Mark) error {
+func (t *turnManager) validateTurn(m mark.Mark) error {
 	if m != t.nextMark {
 		return ErrWrongPlayerTurn
 	}
@@ -243,8 +230,9 @@ func (t *turnManager) switchNextMark() {
 	}
 }
 
-func (f *Field) initNone() {
+// move up?
+func (f *Field) InitNone() {
 	for i := 0; i < 9; i++ {
-		f[i] = None
+		f[i] = mark.None
 	}
 }
