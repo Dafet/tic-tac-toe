@@ -1,6 +1,7 @@
 package ws
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/url"
 
@@ -15,7 +16,7 @@ type Connection struct {
 
 // todo: make buffer chan as return?
 // Msg type as a return?
-func (c *Connection) ListenForServer() <-chan interface{} {
+func (c *Connection) ListenForServer() <-chan *Msg {
 	// todo:
 	// - make proper graceful shutdown?
 	// - add logs?
@@ -24,7 +25,7 @@ func (c *Connection) ListenForServer() <-chan interface{} {
 	// interrupt := make(chan os.Signal, 1)
 	// signal.Notify(interrupt, os.Interrupt)
 
-	msgChan := make(chan interface{})
+	msgChan := make(chan *Msg)
 
 	go func() {
 		defer close(msgChan)
@@ -32,7 +33,7 @@ func (c *Connection) ListenForServer() <-chan interface{} {
 			logger.Debug().Msg("reading from server conn")
 
 			// websocket.TextMessage
-			_, message, err := c.c.ReadMessage()
+			_, raw, err := c.c.ReadMessage()
 			// logger.Debug().Msgf("type is %v", t)
 
 			if err != nil {
@@ -41,9 +42,13 @@ func (c *Connection) ListenForServer() <-chan interface{} {
 				break
 			}
 
-			msgChan <- message
+			msg, err := deserializeMsg(raw)
+			if err != nil {
+				logger.Error().Err(err).Msg("error reading server msg")
+				continue
+			}
 
-			// os.Exit(0)
+			msgChan <- msg
 		}
 	}()
 
@@ -112,4 +117,19 @@ func Connect(addr string) (*Connection, error) {
 	}
 
 	return &conn, nil
+}
+
+// review double marshal
+func MakeGameStartMsg(msg *Msg) (*GameStartMsg, error) {
+	raw, err := json.Marshal(msg.Data)
+	if err != nil {
+		return &GameStartMsg{}, fmt.Errorf(`error marshaling: %w`, err)
+	}
+
+	var dest *GameStartMsg
+	if err = json.Unmarshal(raw, &dest); err != nil {
+		return &GameStartMsg{}, fmt.Errorf(`error unmarshaling: %w`, err)
+	}
+
+	return dest, nil
 }

@@ -6,7 +6,6 @@ import (
 	"tic-tac-toe/game/player"
 )
 
-// - X always goes first
 // - add more verbose errors?
 
 var (
@@ -21,8 +20,8 @@ type Field [9]mark.Mark
 func Start(p1Name, p2Name string) *Game {
 	players := make(map[string]*player.Player)
 
-	players[p1Name] = &player.Player{Name: p1Name, Mark: mark.X, FirstTurn: true}
-	players[p2Name] = &player.Player{Name: p2Name, Mark: mark.O, FirstTurn: false}
+	players[p1Name] = &player.Player{Name: p1Name, Mark: Player1Mark, FirstTurn: true}
+	players[p2Name] = &player.Player{Name: p2Name, Mark: Player2Mark, FirstTurn: false}
 
 	return &Game{
 		players: players,
@@ -66,7 +65,7 @@ func (g *Game) MakeTurn(cellIndex int, playerName string) TurnResult {
 	return TurnResult{IsFinal: false, Err: nil}
 }
 
-func (g *Game) GetGrid() Field {
+func (g *Game) GetField() Field {
 	f := Field{}
 	for i, d := range g.grid.data {
 		f[i] = d
@@ -189,15 +188,10 @@ func (g *grid) isEligiblePlacement(i int, m mark.Mark) error {
 	return nil
 }
 
-const (
-	player1Mark = mark.X
-	player2Mark = mark.O
-)
-
 func newTurnManager() *turnManager {
 	return &turnManager{
 		currentTurn: 0,
-		nextMark:    player1Mark,
+		nextMark:    Player1Mark,
 	}
 }
 
@@ -223,14 +217,15 @@ func (t *turnManager) validateTurn(m mark.Mark) error {
 
 func (t *turnManager) switchNextMark() {
 	switch t.nextMark {
-	case player1Mark:
-		t.nextMark = player2Mark
-	case player2Mark:
-		t.nextMark = player1Mark
+	case Player1Mark:
+		t.nextMark = Player2Mark
+	case Player2Mark:
+		t.nextMark = Player1Mark
 	}
 }
 
 // move up?
+// make private?
 func (f *Field) InitNone() {
 	for i := 0; i < 9; i++ {
 		f[i] = mark.None

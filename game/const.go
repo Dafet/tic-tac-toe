@@ -1,5 +1,7 @@
 package game
 
+import "tic-tac-toe/game/mark"
+
 var (
 	// to win a game certain indexes should be matched with below ones
 	winComboRow1      = []int{0, 1, 2}
@@ -13,8 +15,13 @@ var (
 
 	winCombos = [][]int{winComboRow1, winComboRow2, winComboRow3, winComboCol1, winComboCol2, winComboCol3, winComboDiagonal1, winComboDiagonal2}
 
+	// emptyTurnResult = TurnResult{}
+)
+
+const (
+	Player1Mark = mark.X
+	Player2Mark = mark.O
+
 	winX = "xxx"
 	winO = "ooo"
-
-	// emptyTurnResult = TurnResult{}
 )

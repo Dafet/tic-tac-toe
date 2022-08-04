@@ -2,7 +2,11 @@ package ws
 
 import (
 	"encoding/json"
+	"fmt"
 	"tic-tac-toe/game"
+	"tic-tac-toe/game/mark"
+
+	jsoniter "github.com/json-iterator/go"
 )
 
 // msgs can be server or client only
@@ -30,12 +34,29 @@ type SetUserDataMsg struct {
 	NewName string `json:"new_name"`
 }
 
-func NewMakeTurnMsg(cellIndex int, playerID string) *MakeTurnMsg {
-	return &MakeTurnMsg{
-		g:         &game.Game{},
-		cellIndex: cellIndex,
-		playerID:  playerID,
+// private?
+func newGameStartMsg(firstTurn bool, id string) *Msg {
+	var mark mark.Mark
+	if firstTurn {
+		mark = game.Player1Mark
+	} else {
+		mark = game.Player2Mark
 	}
+
+	return &Msg{
+		Kind: GameStartKind,
+		Data: GameStartMsg{
+			FirstTurn: firstTurn,
+			GameID:    id,
+			Mark:      mark,
+		},
+	}
+}
+
+type GameStartMsg struct {
+	FirstTurn bool      `json:"first_turn"`
+	GameID    string    `json:"game_id"`
+	Mark      mark.Mark `json:"mark"`
 }
 
 func serializeMsg(msg *Msg) ([]byte, error) {
@@ -51,38 +72,103 @@ func serializeMsg(msg *Msg) ([]byte, error) {
 	return data, nil
 }
 
-// ======================TESTING======================
+func deserializeMsg(raw []byte) (*Msg, error) {
+	var (
+		m   *Msg
+		err error
+	)
+
+	if err = json.Unmarshal(raw, &m); err != nil {
+		return &Msg{}, err
+	}
+
+	return m, nil
+}
+
+func NewMakeTurnMsg(cellIndex int, gameID string) *Msg {
+	logger.Debug().
+		Int("cell_index", cellIndex).
+		Str("game_id", gameID).
+		Msg("[debug] make turn msg")
+
+	return &Msg{
+		Kind: MakeTurnKind,
+		Data: &MakeTurnMsg{
+			CellIndex: cellIndex,
+			GameID:    gameID,
+		},
+	}
+}
 
 type MakeTurnMsg struct {
-	g         *game.Game `json:"-"`
-	cellIndex int        `json:"cell_index"`
-	playerID  string     `json:"player_id"`
+	CellIndex int    `json:"cell_index"`
+	GameID    string `json:"game_id"`
 }
 
-func newMakeTurnMsg(g *game.Game, m *MakeTurnMsg) *MakeTurnMsg {
-	return &MakeTurnMsg{
-		g:         g,
-		cellIndex: m.cellIndex,
-		playerID:  m.playerID,
-	}
+type msgFactory interface {
+	make(raw []byte) (*Msg, error)
 }
 
-func (m *MakeTurnMsg) process() error {
-	// somehow compile player id based on conn id
+func newMsgFactory(s *Server) msgFactory {
+	return &serverMsgFactory{s: s}
+}
 
-	result := m.g.MakeTurn(m.cellIndex, m.playerID)
+type serverMsgFactory struct {
+	s *Server
+}
 
-	logger.Debug().Interface("turn_result", result).Msg("a turn has been made")
-
-	if result.Err != nil {
-		return result.Err // text: error making turn?
+func (m *serverMsgFactory) make(raw []byte) (*Msg, error) {
+	var msg *Msg
+	if err := json.Unmarshal(raw, &msg); err != nil {
+		return &Msg{}, fmt.Errorf(`error unmarshaling json msg: %w`, err)
 	}
 
-	// panic("not implemented") // TODO: Implement
+	// somehow compile player id based on conn id?
 
-	return nil
+	switch msg.Kind {
+	case setUserDataKind:
+		return m.makeSetUserDataMsg(msg.Data)
+	case playerRdyKind:
+		return m.makePlayerRdyMsg()
+	case MakeTurnKind:
+		return m.makeTurnMsg(msg.Data)
+	case "":
+		return nil, ErrEmptyMsgKind
+	}
+
+	return nil, ErrUnsupportedMsgKind
 }
 
-func (m *MakeTurnMsg) kind() string {
-	return makeTurnKind
+func (m *serverMsgFactory) makePlayerRdyMsg() (*Msg, error) {
+	return &Msg{Kind: playerRdyKind}, nil
+}
+
+func (m *serverMsgFactory) makeSetUserDataMsg(data interface{}) (*Msg, error) {
+	temp, err := jsoniter.Marshal(data)
+	if err != nil {
+		return nil, fmt.Errorf(`error marshaling data: %w`, err)
+	}
+
+	var dest SetUserDataMsg
+	err = jsoniter.Unmarshal(temp, &dest)
+	if err != nil {
+		return nil, fmt.Errorf(`error unmarshaling data: %w`, err)
+	}
+
+	return &Msg{Kind: setUserDataKind, Data: dest}, nil
+}
+
+func (m *serverMsgFactory) makeTurnMsg(data interface{}) (*Msg, error) {
+	temp, err := jsoniter.Marshal(data)
+	if err != nil {
+		return nil, fmt.Errorf(`error marshaling data: %w`, err)
+	}
+
+	var dest MakeTurnMsg
+	err = jsoniter.Unmarshal(temp, &dest)
+	if err != nil {
+		return nil, fmt.Errorf(`error unmarshaling data: %w`, err)
+	}
+
+	return &Msg{Kind: MakeTurnKind, Data: dest}, nil
 }

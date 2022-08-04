@@ -17,14 +17,20 @@ const (
 var (
 	ErrUnsupportedMsgKind = errors.New(`unsupported msg kind`)
 	ErrEmptyMsgKind       = errors.New(`empty msg kind`)
+	ErrGameNotFound       = errors.New(`game is not found`)
 )
 
 const (
-	connKind        = "connection"
-	playerRdyKind   = "play-ready"
-	disconnectKind  = "disconnect"
-	testKind        = "test"
-	makeTurnKind    = "make-turn"
+	// server kind?
+	connKind       = "connection"
+	playerRdyKind  = "play-ready"
+	disconnectKind = "disconnect"
+	testKind       = "test"
+
 	setUserDataKind = "set-user-data"
+
+	// client side?
+	GameStartKind = "game-start"
+	MakeTurnKind  = "make-turn"
 	// player-turn-msg etc.
 )

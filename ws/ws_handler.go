@@ -14,7 +14,8 @@ import (
 	"github.com/lithammer/shortuuid"
 )
 
-// todo: implement ping, pong, close msgs
+// TODO: implement ping, pong, close msgs
+// add locks for reading (conns)?
 
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
@@ -73,7 +74,7 @@ func (h *wsHandler) upgradeConn(w http.ResponseWriter, r *http.Request) {
 func (h *wsHandler) storeConn(c *websocket.Conn, playerName string) (key string) {
 	connKey := shortuuid.New()
 	h.conns[connKey] = &playerData{
-		wsconn: c,
+		wsconn: Connection{c: c},
 		name:   playerName,
 	}
 	return connKey
@@ -89,7 +90,7 @@ func (h *wsHandler) flushConn(key string) error {
 		return err
 	}
 
-	delete(h.conns, key)
+	delete(h.conns, key) // sometimes panicking here (ctrl-c on client side?)
 
 	return nil
 }
@@ -104,7 +105,13 @@ func (h *wsHandler) readClientMsg(connID string) error {
 	var readErr error
 
 	for {
-		mt, msgRaw, err := conn.wsconn.ReadMessage()
+		mt, msgRaw, err := conn.wsconn.c.ReadMessage()
+
+		logger.Info().
+			Str("conn_id", connID).
+			Str("msg_raw", string(msgRaw)).
+			Int("websocket_msg_type", mt).
+			Msg("incoming client's msg")
 
 		if mt == websocket.CloseMessage {
 			logger.Debug().Msg("client sent close message, flushing connection")
@@ -164,6 +171,15 @@ func (h *wsHandler) getPlayerDataPtr(connID string) (*playerData, bool) {
 	return p, true
 }
 
+func (h *wsHandler) sendMsg(connID string, msg *Msg) error {
+	c, ok := h.conns[connID]
+	if !ok {
+		return errors.New(`connID is not found`)
+	}
+
+	return c.wsconn.SendMsg(msg)
+}
+
 func compilePlayerName(r *http.Request) string {
 	name := r.URL.Query().Get(playerNameParam)
 	if name != "" {
@@ -175,7 +191,8 @@ func compilePlayerName(r *http.Request) string {
 
 // move up?
 type playerData struct {
-	wsconn *websocket.Conn
+	// wsconn *websocket.Conn
+	wsconn Connection
 	name   string
 }
 

@@ -1,7 +1,9 @@
 package main
 
 import (
+	"tic-tac-toe/matchmaking"
 	"tic-tac-toe/ws"
+	"time"
 )
 
 // inject logger everywhere?
@@ -16,13 +18,18 @@ func main() {
 	// 	}
 	// }()
 
-	server.Start()
+	// go func() {
+	// 	for {
+	// 		fmt.Println("broadcasting...")
+	// 		server.BroadcastMsg(ws.NewSetUserDataMsg("sample"))
+	// 		time.Sleep(time.Millisecond * 500)
+	// 	}
+	// }()
 
-	// for {
-	// 	fmt.Println("broadcasting: Hello client")
-	// 	server.BroadcastMsg("Hello client")
-	// 	time.Sleep(time.Millisecond * 500)
-	// }
+	mm := matchmaking.NewRandom(time.Duration(time.Millisecond * 500))
+	server.SetMatchmakingEngine(mm)
+
+	server.Start()
 
 	// fmt.Scanln()
 }

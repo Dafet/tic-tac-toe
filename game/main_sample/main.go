@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 	"tic-tac-toe/game"
+	"tic-tac-toe/game/player"
 	l "tic-tac-toe/logger"
 )
 
@@ -28,7 +29,7 @@ func consoleSample() {
 	logger.Info().Msg("player1 is " + p1Name)
 	logger.Info().Msg("player2 is " + p2Name)
 
-	finish := make(chan game.Player)
+	finish := make(chan player.Player)
 
 	go func() {
 		p := <-finish
@@ -37,7 +38,7 @@ func consoleSample() {
 	}()
 
 	for {
-		drawGrid(g.GetGrid())
+		drawGrid(g.GetField())
 
 		logger.Info().Msg("waiting for player1 cell index: ")
 
@@ -58,7 +59,7 @@ func consoleSample() {
 			finish <- result.Winner
 		}
 
-		drawGrid(g.GetGrid())
+		drawGrid(g.GetField())
 
 		logger.Info().Msg("waiting for player2 cell index: ")
 
@@ -74,7 +75,7 @@ func consoleSample() {
 			logger.Fatal().Err(result.Err).Msg("error making turn as p2")
 		}
 
-		drawGrid(g.GetGrid())
+		drawGrid(g.GetField())
 
 		if result.IsFinal {
 			finish <- result.Winner
@@ -91,7 +92,7 @@ func debugVersion() {
 	logger.Info().Msg("player2 is " + p2Name)
 
 	for {
-		drawGrid(g.GetGrid())
+		drawGrid(g.GetField())
 
 		logger.Info().Msg("waiting for player1 cell index: ")
 
@@ -108,7 +109,7 @@ func debugVersion() {
 			logger.Info().Msgf("game is finished, winner: %+v", result.Winner)
 		}
 
-		drawGrid(g.GetGrid())
+		drawGrid(g.GetField())
 
 		logger.Info().Msg("waiting for player2 cell index: ")
 
@@ -120,7 +121,7 @@ func debugVersion() {
 			logger.Fatal().Err(result.Err).Msg("error making turn as p2")
 		}
 
-		drawGrid(g.GetGrid())
+		drawGrid(g.GetField())
 
 		if result.IsFinal {
 			logger.Info().Msgf("game is finished, winner: %+v", result.Winner)
