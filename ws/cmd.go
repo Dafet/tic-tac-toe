@@ -3,6 +3,7 @@ package ws
 import (
 	"errors"
 	"fmt"
+	"tic-tac-toe/game"
 )
 
 type cmd interface {
@@ -34,7 +35,7 @@ func (s *serverCmdFactory) make(connID string, msg *Msg) (cmd, error) {
 		// do nothing here
 	// case GameStartKind:
 	case MakeTurnKind:
-		return s.makeMakeTurnCmd(connID, msg)
+		return s.makeMakeTurnCmd(connID, msg, s.s.eventCh)
 	}
 
 	return nil, fmt.Errorf(`unknown msg kind: %s`, msg.Kind)
@@ -57,7 +58,7 @@ func (s *serverCmdFactory) makeSetPlayerDataCmd(connID string, msg *Msg) (setPla
 	}, nil
 }
 
-func (s *serverCmdFactory) makeMakeTurnCmd(connID string, msg *Msg) (makeTurnCmd, error) {
+func (s *serverCmdFactory) makeMakeTurnCmd(connID string, msg *Msg, events chan interface{}) (makeTurnCmd, error) {
 	data, ok := msg.Data.(MakeTurnMsg)
 	if !ok {
 		return makeTurnCmd{}, errors.New(`msg is not SetUserDataMsg`)
@@ -68,6 +69,7 @@ func (s *serverCmdFactory) makeMakeTurnCmd(connID string, msg *Msg) (makeTurnCmd
 		connID:    connID,
 		gameID:    gameID(data.GameID),
 		gm:        s.s.gm,
+		eventCh:   events,
 	}
 
 	return c, nil
@@ -105,6 +107,7 @@ type playerRdyCmd struct {
 }
 
 func (c playerRdyCmd) apply() error {
+	logger.Info().Str("conn_id", c.connID).Msg("queueing player")
 	return c.engine.QueuePlayer(c.connID)
 }
 
@@ -113,12 +116,23 @@ type makeTurnCmd struct {
 	connID    string
 	gameID    gameID
 	gm        gameManager
+	eventCh   chan interface{}
 }
 
 func (c makeTurnCmd) apply() error {
 	// review error handling
 	err := c.gm.processTurn(c.gameID, c.cellIndex, c.connID)
 	if err != nil {
+
+		// review - make proper error processing - some util func?
+		if err == game.ErrCellOccupied {
+			c.eventCh <- invalidCellIndexEvent{
+				cellIndex: c.cellIndex,
+				connID:    c.connID,
+				desc:      fmt.Sprintf("cell [%v] is already occupied", c.cellIndex),
+			}
+		}
+
 		return fmt.Errorf(`error processing turn: %w`, err)
 	}
 

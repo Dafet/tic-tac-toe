@@ -1,17 +1,12 @@
 package matchmaking
 
 import (
-	"errors"
 	"math/rand"
 	"sync"
 	log "tic-tac-toe/logger"
 	"tic-tac-toe/ws"
 
 	"time"
-)
-
-var (
-	ErrAlreadyQueued = errors.New(`player is already queued`)
 )
 
 var logger = log.NewDefaultZerolog()
@@ -37,7 +32,7 @@ func (r *Random) QueuePlayer(id string) error {
 	defer r.mu.Unlock()
 
 	if found := r.playerQueued(id); found {
-		return ErrAlreadyQueued
+		return ws.ErrPlayerAlreadyInQueue
 	}
 
 	r.queue = append(r.queue, id)
@@ -46,7 +41,16 @@ func (r *Random) QueuePlayer(id string) error {
 }
 
 func (r *Random) UnqueuePlayer(id string) error {
-	panic("not implemented") // TODO: Implement
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if found := r.playerQueued(id); !found {
+		return ws.ErrPlayerNotInQueue
+	}
+
+	r.queue = popElem(id, r.queue)
+
+	return nil
 }
 
 func (r *Random) Init(result chan ws.PlayerMatch) {
@@ -56,8 +60,7 @@ func (r *Random) Init(result chan ws.PlayerMatch) {
 
 func (r *Random) startTick() {
 	for {
-		<-r.t.C // ticker
-		// logger.Debug().Msg("ticking random mm engine")
+		<-r.t.C
 
 		m, ok := r.match()
 		if ok {
@@ -85,11 +88,11 @@ func (r *Random) pickIDs() (string, string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	p1Index, p1 := pickRandom(r.queue)
-	r.queue = popElem(p1Index, r.queue)
+	p1Index, p1 := pickRandomElem(r.queue)
+	r.queue = popElemByIndex(p1Index, r.queue)
 
-	p2Index, p2 := pickRandom(r.queue)
-	r.queue = popElem(p2Index, r.queue)
+	p2Index, p2 := pickRandomElem(r.queue)
+	r.queue = popElemByIndex(p2Index, r.queue)
 
 	return p1, p2
 }
@@ -115,17 +118,23 @@ func init() {
 	rand.NewSource(time.Now().Unix()) // TODO: useless?
 }
 
-func popElem[a any](i int, slice []a) []a {
+func popElemByIndex[a any](i int, slice []a) []a {
 	return append(slice[:i], slice[i+1:]...)
 }
 
+func popElem[t comparable](elem t, slice []t) []t {
+	for i, v := range slice {
+		if v == elem {
+			slice = append(slice[:i], slice[i+1:]...)
+		}
+	}
+
+	return slice
+}
+
 // picks random element from "a" and returns element's index
-func pickRandom[a any](slice []a) (int, a) {
+func pickRandomElem[a any](slice []a) (int, a) {
 	l := len(slice)
 	n := rand.Intn(l)
 	return n, slice[n]
 }
-
-// // func popElem(slice []string, s int) []string {
-// // 	return append(slice[:s], slice[s+1:]...)
-// }

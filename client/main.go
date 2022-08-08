@@ -1,9 +1,13 @@
+// This is a sample client.
+
 package main
 
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"os/signal"
+	"strconv"
 	"strings"
 	"tic-tac-toe/game"
 	"tic-tac-toe/game/mark"
@@ -14,16 +18,22 @@ import (
 
 const (
 	defaultAddr = "localhost:8080"
-	playerName  = "Sample"
 )
 
 var (
 	logger = log.NewDefaultZerolog()
 
-	conn    *ws.Connection
-	gameFld game.Field
-	gameID  string
+	playerName = ""
+
+	conn       *ws.Connection
+	gameFld    game.Field
+	gameID     string
+	playerMark mark.Mark
 )
+
+func init() {
+	linuxClear()
+}
 
 func main() {
 	var err error
@@ -36,32 +46,16 @@ func main() {
 
 	go initInterruptSignal()
 
-	// todo:
-	// - make proper graceful shutdown?
-
-	// finish := make(chan struct{})
-
-	var (
-		playerName = mustGetPlayerName()
-		msgChan    = conn.ListenForServer()
-	)
-
-	// implement msg send queue?
+	playerName = mustGetPlayerName()
 
 	go sendSetPlayerDataMsg(conn, playerName)
 	time.Sleep(time.Millisecond * 30)
 	go sendRdyMsg(conn, playerName)
 
-	// go func() {
-	// 	for {
-	// 		logger.Info().Msg("sending test msg")
-	// 		conn.SendMsg(ws.NewTestMsg("Josh"))
-	// 		time.Sleep(time.Second * 1)
-	// 	}
-	// }()
+	fmt.Println("looking for a game...")
 
-	// rewrite - there is a bottleneck for msg receiving.
-	// review - huge tabs
+	var msgChan = listenForServer()
+
 	for {
 		m, moreMsg := <-msgChan
 
@@ -78,23 +72,63 @@ func main() {
 			}
 
 			gameID = msg.GameID
+			playerMark = msg.Mark
 
-			logger.Info().Msgf("starting game with id: %s, first turn: %v, mark: %v",
-				gameID,
-				msg.FirstTurn,
-				msg.Mark.Str())
-
-			// hardcoded init - get fld state from msg?
+			fmt.Println("starting game...")
+			fmt.Println("game id: ", gameID)
+			fmt.Println("mark   : ", playerMark)
 
 			drawGrid(gameFld)
 
 			if msg.FirstTurn {
-				// make a turn as well as send msg
-				processFirstTurn(msg.Mark)
+				fmt.Println("you are making turn, write cell index (1-9)")
+				processTurn(playerMark)
+				redrawGameData()
 			}
 
-		case "next turn":
+			fmt.Println("waiting for another player to make a turn...")
+		case ws.WaitingTurnKind:
+			msg, err := ws.MakeWaitingTurnMsg(m)
+			if err != nil {
+				logger.Fatal().Err(err).Msg("error asserting game msg")
+			}
 
+			gameFld = msg.Field
+			redrawGameData()
+
+			fmt.Println("you are making turn, write cell index (1-9)")
+
+			processTurn(playerMark)
+
+			redrawGameData()
+			fmt.Println("waiting for another player to make a turn...")
+		case ws.ErrCellOccupiedKind:
+			fmt.Println("cell is already occupied, choose another")
+
+			processTurn(playerMark)
+
+			redrawGameData()
+		case ws.GameFinishedKind:
+			msg, err := ws.MakeGameFinishedMsg(m)
+			if err != nil {
+				logger.Fatal().Err(err).Msg("error asserting game msg")
+			}
+
+			gameFld = msg.Field
+			redrawGameData()
+
+			switch {
+			case msg.PlayerWon:
+				fmt.Println("game is over, you won!")
+			case msg.IsDraw:
+				fmt.Println("game is over, draw")
+			case msg.OpponentDisconect:
+				fmt.Println("game is over, your opponent has disconnected")
+			default:
+				fmt.Println("game is over, you have been defeated")
+			}
+
+			processRetryGame()
 		default:
 			logger.Info().Msgf("received from server: %+v", m)
 		}
@@ -112,6 +146,41 @@ func main() {
 	// connect to server
 	// send rdy signal
 	// establish msg receive loop
+}
+
+func listenForServer() <-chan *ws.Msg {
+	// todo:
+	// - make proper graceful shutdown?
+	// - add logs?
+
+	// process interrupt?
+	// interrupt := make(chan os.Signal, 1)
+	// signal.Notify(interrupt, os.Interrupt)
+
+	msgChan := make(chan *ws.Msg)
+
+	go func() {
+		defer close(msgChan)
+		for {
+			_, raw, err := conn.ReadMessage()
+
+			if err != nil {
+				// todo: what to do in case of errors
+				logger.Warn().Err(err).Msg("error reading msg from server")
+				break
+			}
+
+			msg, err := ws.DeserializeMsg(raw)
+			if err != nil {
+				logger.Error().Err(err).Msg("error reading server msg")
+				continue
+			}
+
+			msgChan <- msg
+		}
+	}()
+
+	return msgChan
 }
 
 func initInterruptSignal() {
@@ -158,6 +227,7 @@ func sendRdyMsg(conn *ws.Connection, name string) {
 }
 
 func drawGrid(fld game.Field) {
+
 	b := strings.Builder{}
 	defer b.Reset()
 
@@ -172,28 +242,93 @@ func drawGrid(fld game.Field) {
 	fmt.Println(b.String())
 }
 
-func processFirstTurn(m mark.Mark) error {
-	var cell int
+func processTurn(m mark.Mark) error {
+	var cellIndex int
 
-	logger.Info().Msg("you are making first turn, write cell index (1-9)")
+	for {
+		var inputRaw string
+		_, err := fmt.Scan(&inputRaw)
+		if err != nil {
+			fmt.Println("error reading player's input: ", err)
+			continue
+		}
 
-	_, err := fmt.Scanln(&cell)
-	if err != nil {
-		logger.Fatal().Err(err).Msg("error getting player's input")
+		input, err := strconv.Atoi(inputRaw)
+		if err != nil {
+			fmt.Println("invalid input, must be number from 1 to 9, write again ", err)
+			continue
+		}
+
+		cellIndex = input - 1
+
+		if cellIndex < 0 || cellIndex > 8 {
+			fmt.Println("invalid number, must be from 1 to 9")
+			continue
+		}
+
+		break
 	}
 
-	i := cell - 1
-
-	if i < 0 {
-		logger.Fatal().Msg("invalid cell index: must not be less than 1") // "less than 1 is confusing - rewrite"
+	if placedMark := gameFld[cellIndex]; placedMark != mark.None {
+		fmt.Printf("cell is already occupied with [%s], place another mark \n", m.Str())
+		return processTurn(m)
 	}
 
-	gameFld[i] = m
+	gameFld[cellIndex] = m
 
-	err = conn.SendMsg(ws.NewMakeTurnMsg(i, gameID))
+	msg := ws.NewMakeTurnMsg(cellIndex, gameID)
+	err := conn.SendMsg(msg)
 	if err != nil {
 		logger.Fatal().Err(err).Msg("error sending makeTurn msg")
 	}
 
 	return nil
+}
+
+func processRetryGame() {
+	fmt.Println("start a new game? (y/n)")
+
+	var input string
+	for {
+		_, err := fmt.Scan(&input)
+		if err != nil {
+			fmt.Println("error reading player's input: ", err)
+			continue
+		}
+
+		if strings.ToLower(input) != "y" && strings.ToLower(input) != "n" {
+			continue
+		}
+
+		break
+	}
+
+	if input == "y" {
+		gameFld.InitNone()
+		sendRdyMsg(conn, playerName)
+		linuxClear()
+
+		fmt.Println("looking for a game...")
+		return
+	}
+
+	if err := conn.Close(); err != nil {
+		logger.Fatal().Err(err).Msg("error closing connection")
+	}
+
+	os.Exit(0)
+}
+
+func redrawGameData() {
+	linuxClear()
+
+	fmt.Println("game id: ", gameID)
+	fmt.Println("mark: ", playerMark)
+	drawGrid(gameFld)
+}
+
+func linuxClear() {
+	cmd := exec.Command("clear") //Linux example, its tested
+	cmd.Stdout = os.Stdout
+	cmd.Run()
 }

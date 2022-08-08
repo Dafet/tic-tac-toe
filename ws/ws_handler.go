@@ -7,14 +7,14 @@ import (
 	"net/http"
 	"reflect"
 	"sync"
-	"tic-tac-toe/game/mark"
-	"tic-tac-toe/game/player"
 
 	"github.com/gorilla/websocket"
+	jsoniter "github.com/json-iterator/go"
 	"github.com/lithammer/shortuuid"
+	"github.com/rs/zerolog"
 )
 
-// TODO: implement ping, pong, close msgs
+// TODO: implement ping, pong
 // add locks for reading (conns)?
 
 var upgrader = websocket.Upgrader{
@@ -23,16 +23,17 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
-func newWsHandler() *wsHandler {
+func newWsHandler(eventCh chan interface{}) *wsHandler {
 	return &wsHandler{
-		conns: make(map[string]*playerData),
+		eventCh: eventCh,
+		conns:   make(map[string]*playerData),
 	}
 }
 
-// don't reference whole server in msg structs?
 type wsHandler struct {
 	// conns map[string]*websocket.Conn
 	conns      map[string]*playerData
+	eventCh    chan interface{}
 	playerLock sync.Mutex
 }
 
@@ -59,16 +60,14 @@ func (h *wsHandler) upgradeConn(w http.ResponseWriter, r *http.Request) {
 
 	go func() {
 		connID := h.storeConn(c, "") // review playerName param.
-		logger.Debug().Msg("stored connection under: " + connID)
+		logger := logger.With().Str("conn_id", connID).Logger()
 
-		h.readClientMsg(connID)
+		logger.Info().Msg("listening for conn")
+		h.readClientMsgs(connID, logger)
+		logger.Info().Msg("stop listening for conn")
 
-		logger.Info().Msg("stop listening for: " + connID)
-
-		h.flushConn(connID) // delete from rdyConns map as well?
+		h.flushConn(connID)
 	}()
-
-	// w.WriteHeader(200) // ok? no - this causing panic
 }
 
 func (h *wsHandler) storeConn(c *websocket.Conn, playerName string) (key string) {
@@ -80,23 +79,7 @@ func (h *wsHandler) storeConn(c *websocket.Conn, playerName string) (key string)
 	return connKey
 }
 
-func (h *wsHandler) flushConn(key string) error {
-	conn, ok := h.conns[key]
-	if !ok {
-		return nil
-	}
-
-	if err := conn.wsconn.Close(); err != nil {
-		return err
-	}
-
-	delete(h.conns, key) // sometimes panicking here (ctrl-c on client side?)
-
-	return nil
-}
-
-// there are 1:1 ratio conn to func call (issue?)
-func (h *wsHandler) readClientMsg(connID string) error {
+func (h *wsHandler) readClientMsgs(connID string, logger zerolog.Logger) error {
 	conn, ok := h.conns[connID]
 	if !ok {
 		return errors.New(`connection is not established`)
@@ -104,29 +87,23 @@ func (h *wsHandler) readClientMsg(connID string) error {
 
 	var readErr error
 
+outer:
 	for {
-		mt, msgRaw, err := conn.wsconn.c.ReadMessage()
+		mt, msgRaw, err := conn.wsconn.ReadMessage()
 
 		logger.Info().
-			Str("conn_id", connID).
 			Str("msg_raw", string(msgRaw)).
 			Int("websocket_msg_type", mt).
-			Msg("incoming client's msg")
+			Msg("[incoming] client's msg")
 
-		if mt == websocket.CloseMessage {
-			logger.Debug().Msg("client sent close message, flushing connection")
-
-			if err = h.flushConn(connID); err != nil {
-				logger.Error().Err(err).Msg("error flushing connection")
-			}
-		}
-
-		if err != nil {
-			logger.Error().Err(err).Msg("error reading msg from connection, stopping to listen")
+		switch {
+		case IsCloseError(err):
+			h.eventCh <- clientDisconnectEvent{connID: connID}
+			return nil
+		case err != nil:
+			logger.Error().Err(err).Msg("error reading client msg, finish listening")
 			readErr = err
-			break // Выходим из цикла, если клиент пытается закрыть соединение или связь прервана
-
-			// fix: "websocket: close 1006 (abnormal closure): unexpected EOF"
+			break outer
 		}
 
 		msg, err := msgfactory.make(msgRaw)
@@ -141,9 +118,11 @@ func (h *wsHandler) readClientMsg(connID string) error {
 			continue
 		}
 
+		logger.Info().Str("cmd_name", reflect.TypeOf(cmd).Name()).Msg("applying command")
+
 		if err = cmd.apply(); err != nil {
-			// add cmd name into log?
-			logger.Error().Err(err).Str("cmd_name", reflect.TypeOf(cmd).Name()).Msg("error applying cmd")
+			logger.Error().Err(err).Msg("error applying cmd")
+			continue
 		}
 	}
 
@@ -151,7 +130,6 @@ func (h *wsHandler) readClientMsg(connID string) error {
 		return readErr
 	}
 
-	// panic("why are we here?") // change panic/text
 	return nil
 }
 
@@ -171,22 +149,39 @@ func (h *wsHandler) getPlayerDataPtr(connID string) (*playerData, bool) {
 	return p, true
 }
 
+func (h *wsHandler) flushConn(key string) error {
+	conn, ok := h.conns[key]
+	if !ok {
+		return nil
+	}
+
+	if err := conn.wsconn.Close(); err != nil {
+		return fmt.Errorf(`error closing conn: %w`, err)
+	}
+
+	delete(h.conns, key)
+
+	return nil
+}
+
 func (h *wsHandler) sendMsg(connID string, msg *Msg) error {
 	c, ok := h.conns[connID]
 	if !ok {
 		return errors.New(`connID is not found`)
 	}
 
-	return c.wsconn.SendMsg(msg)
-}
-
-func compilePlayerName(r *http.Request) string {
-	name := r.URL.Query().Get(playerNameParam)
-	if name != "" {
-		return name
+	msgRaw, err := jsoniter.Marshal(msg)
+	if err != nil {
+		logger.Error().Err(err).Msg("error marshaling msg for logging")
 	}
 
-	return shortuuid.New()
+	logger.Info().
+		Str("conn_id", connID).
+		Str("msg_raw", string(msgRaw)).
+		Int("websocket_msg_type", websocket.TextMessage). // hardcoded
+		Msg("[outgoing] sending msg to client")
+
+	return c.wsconn.SendMsg(msg)
 }
 
 // move up?
@@ -194,12 +189,4 @@ type playerData struct {
 	// wsconn *websocket.Conn
 	wsconn Connection
 	name   string
-}
-
-func (p *playerData) compilePlayer() player.Player {
-	return player.Player{
-		Name:      p.name,
-		Mark:      mark.X, // currently hardcoded - fix - insert into playerData struct more data?
-		FirstTurn: false,
-	}
 }

@@ -4,33 +4,36 @@ import "errors"
 
 // clear here
 
-var (
-	ErrPlayerNotFound = errors.New(`player is not found`)
+const (
+	GameStartKind       = "game-start"
+	MakeTurnKind        = "make-turn"
+	WaitingTurnKind     = "waiting-player-turn"
+	ErrCellOccupiedKind = "cell-occupied"
+	GameFinishedKind    = "game-finished"
 )
 
+var (
+	ErrPlayerNotFound       = errors.New(`player is not found`)
+	ErrPlayerAlreadyInQueue = errors.New(`player is already in a game queue`)
+	ErrPlayerNotInQueue     = errors.New(`player is not in a game queue`)
+)
+
+// TODO: make configurable needed values
 const (
-	upgradeConnHandlerPath = "/conn" // /conn?
-	port                   = ":8080" // make configurable
+	upgradeConnHandlerPath = "/conn"
+	port                   = ":8080"
 	playerNameParam        = "player_name"
+
+	// server kinds.
+	connKind        = "connection"
+	playerRdyKind   = "play-ready"
+	disconnectKind  = "disconnect"
+	testKind        = "test"
+	setUserDataKind = "set-user-data"
 )
 
 var (
-	ErrUnsupportedMsgKind = errors.New(`unsupported msg kind`)
-	ErrEmptyMsgKind       = errors.New(`empty msg kind`)
-	ErrGameNotFound       = errors.New(`game is not found`)
-)
-
-const (
-	// server kind?
-	connKind       = "connection"
-	playerRdyKind  = "play-ready"
-	disconnectKind = "disconnect"
-	testKind       = "test"
-
-	setUserDataKind = "set-user-data"
-
-	// client side?
-	GameStartKind = "game-start"
-	MakeTurnKind  = "make-turn"
-	// player-turn-msg etc.
+	errUnsupportedMsgKind = errors.New(`unsupported msg kind`)
+	errEmptyMsgKind       = errors.New(`empty msg kind`)
+	errGameNotFound       = errors.New(`game is not found`)
 )

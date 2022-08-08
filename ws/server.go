@@ -8,7 +8,16 @@ import (
 )
 
 // this should be a facade for mm, websocket
-// TODO: clear old games (due to disconnects etc)
+// TODO:
+//  - clear old games (due to disconnects etc)
+//	- second player always goes first?
+//	- send msg to clients if their game has broken (p2 disconnect etc)?
+//  - add sending client msgs logs
+//  - add retry msg to clients
+//  - привести к единому виду терминалогию connID/playerID
+//  - выделить единый ошибочный тип для Msg + cmd
+//  - unqueue player on disconnect
+//  - recover from panic
 
 var (
 	logger     = log.NewDefaultZerolog()
@@ -18,8 +27,11 @@ var (
 )
 
 func New() *Server {
+	eventCh := make(chan interface{})
+
 	s := &Server{
-		handler: newWsHandler(),
+		eventCh: eventCh,
+		handler: newWsHandler(eventCh),
 	}
 
 	msgfactory = newMsgFactory(s)
@@ -32,7 +44,7 @@ type Server struct {
 	handler  *wsHandler
 	gm       gameManager
 	mmengine MatchmakingEngine
-	eventCh  chan interface{}
+	eventCh  chan interface{} // change type to concrete/abstract one
 }
 
 func (s *Server) SetMatchmakingEngine(mm MatchmakingEngine) {
@@ -40,16 +52,15 @@ func (s *Server) SetMatchmakingEngine(mm MatchmakingEngine) {
 }
 
 func (s *Server) Start() {
-	s.eventCh = make(chan interface{})
 	go s.startEventLoop()
 
-	s.initGM()
-	s.initMM()
+	s.initGameManager()
+	s.initMatchmaking()
 
 	s.handler.startHandle()
 }
 
-func (s *Server) initMM() {
+func (s *Server) initMatchmaking() {
 	if s.mmengine == nil {
 		logger.Fatal().Msg("matchmaking engine is not initialized")
 	}
@@ -72,8 +83,8 @@ func (s *Server) initMM() {
 	s.mmengine.Init(matchRdy)
 }
 
-func (s *Server) initGM() {
-	s.gm = newGameManagerImpl()
+func (s *Server) initGameManager() {
+	s.gm = newGameManagerInMem(s.eventCh)
 }
 
 // process errors!
@@ -135,29 +146,128 @@ func (s *Server) startEventLoop() {
 				// try something here?
 				logger.Error().Err(err).Msg("error sending start game msg")
 			}
+		case invalidCellIndexEvent:
+			s.processInvalidCellIndexEvent(e)
+		case waitingTurnEvent:
+			s.processWaitingForTurnEvent(e)
 		case gameFinishedEvent:
+			s.processGameFinishedEvent(e)
+		case clientDisconnectEvent:
+			s.processClientDisconnectEvent(e)
 		default:
 			logger.Error().Msgf("unknown event type: %+v", e)
 		}
 	}
 }
 
-// func (s *Server) listenForPlayerMatch() {
-// 	for {
-// 		m, ok := <-s.matchRdy
-// 		if !ok {
-// 			// review
-// 			logger.Error().Msg("matchRdy chan is closed")
-// 			return
-// 		}
+func (s *Server) processWaitingForTurnEvent(e waitingTurnEvent) {
+	// send e.playerID waiting for turn msg
 
-// 		logger.Debug().Msgf("match is rdy: %+v", m)
+	fld, found := s.gm.getGameField(e.gameID)
+	if !found {
+		logger.Warn().Msgf("cannot find gameID: [%s] for waitingNextTurn msg", e.gameID.str())
+		// how to process it?
+		return
+	}
 
-// 		id := s.gm.startGame(m.Player1ID, m.Player2ID)
+	playerID, found := s.gm.getAnotherPlayerID(e.gameID, e.turnMadeByPlayer)
+	if !found {
+		logger.Warn().Msgf("cannot get another playerID for waitingNextTurn msg, gameID: [%s], previous turn was made by: [%s]", e.gameID.str(), e.turnMadeByPlayer)
+		// how to process it?
+		return
+	}
 
-// 		if err := s.sendGameStartMsgs(m, id); err != nil {
-// 			// try something here?
-// 			logger.Error().Err(err).Msg("error sending start game msg")
-// 		}
-// 	}
-// }
+	m := newWaitingTurnMsg(e.gameID, fld)
+	err := s.handler.sendMsg(playerID, m)
+	if err != nil {
+		// how to process correctly - retry logic?
+		logger.Error().Err(err).Msgf("error sending '%s' msg", WaitingTurnKind)
+	}
+}
+
+func (s *Server) processInvalidCellIndexEvent(e invalidCellIndexEvent) {
+	m := newErrorMsg(ErrCellOccupiedKind, e.desc)
+	err := s.handler.sendMsg(e.connID, m)
+	if err != nil {
+		// how to process correctly - retry logic?
+		logger.Error().Err(err).Msgf("error sending '%s' msg", WaitingTurnKind)
+	}
+}
+
+func (s *Server) processGameFinishedEvent(e gameFinishedEvent) {
+	fld, found := s.gm.getGameField(e.gameID)
+	if !found {
+		logger.Warn().Msgf("cannot find gameID: [%s] for waitingNextTurn msg", e.gameID.str())
+		// how to process it?
+		return
+	}
+
+	// make func for this?
+	if e.isDraw {
+		logger.Info().Msgf("game [%s] has finished with [draw]", e.gameID)
+		g, ok := s.gm.getGameByID(e.gameID)
+		if !ok {
+			logger.Error().Msgf("game [%s] is not found", e.gameID)
+			return
+		}
+
+		var drawMsg = newGameFinishedDrawMsg(e.gameID, fld)
+
+		if err := s.handler.sendMsg(g.p1, drawMsg); err != nil {
+			logger.Error().Err(err).Msg("error sending draw msg to player1")
+		}
+
+		if err := s.handler.sendMsg(g.p2, drawMsg); err != nil {
+			logger.Error().Err(err).Msg("error sending draw msg to player2")
+		}
+
+		return
+	}
+
+	// make func for this?
+	var (
+		winMsg    = newGameFinishedWinMsg(e.gameID, fld)
+		defeatMsg = newGameFinishedDefeatMsg(e.gameID, fld)
+		err       error
+	)
+
+	logger.Info().Msgf("game [%s] has finished, winner [%s]", e.gameID, e.winnerID)
+
+	if err = s.handler.sendMsg(e.winnerID, winMsg); err != nil {
+		logger.Error().Err(err).Msg("error sending win msg")
+	}
+
+	if err = s.handler.sendMsg(e.defeatedID, defeatMsg); err != nil {
+		logger.Error().Err(err).Msg("error sending defeat msg")
+	}
+}
+
+func (s *Server) processClientDisconnectEvent(e clientDisconnectEvent) {
+	if e.connID == "" {
+		return
+	}
+
+	logger := logger.With().Str("conn_id", e.connID).Logger()
+
+	var err error
+
+	logger.Info().Msg("unqueueing player")
+	if err = s.mmengine.UnqueuePlayer(e.connID); err != nil {
+		logger.Warn().Err(err).Str("conn_id", e.connID).Msg("error unqueueing player")
+		// return
+	}
+
+	g, found := s.gm.getGameByPlayer(e.connID)
+	if found {
+		anotherPlayer := g.getAnotherPlayerID(e.connID)
+		dcMsg := newGameFinishedDisconnectMsg(g.id, g.game.GetField())
+
+		if err = s.handler.sendMsg(anotherPlayer, dcMsg); err != nil {
+			logger.Error().Err(err).Msg("error sending finish msg")
+		}
+	} else {
+		logger.Info().Msg("player currenly is not playing any game")
+	}
+
+	s.gm.finishGame(g.id)
+}

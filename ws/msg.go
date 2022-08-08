@@ -9,8 +9,7 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
-// msgs can be server or client only
-// separate through pkgs?
+// msgs can be server or client only - separate through pkgs?
 
 type Msg struct {
 	Kind string
@@ -59,6 +58,86 @@ type GameStartMsg struct {
 	Mark      mark.Mark `json:"mark"`
 }
 
+func NewMakeTurnMsg(cellIndex int, gameID string) *Msg {
+	return &Msg{
+		Kind: MakeTurnKind,
+		Data: &MakeTurnMsg{
+			CellIndex: cellIndex,
+			GameID:    gameID,
+		},
+	}
+}
+
+type MakeTurnMsg struct {
+	CellIndex int    `json:"cell_index"`
+	GameID    string `json:"game_id"`
+}
+
+func newWaitingTurnMsg(id gameID, fld game.Field) *Msg {
+	return &Msg{
+		Kind: WaitingTurnKind,
+		Data: WaitingTurnMsg{
+			GameID: id.str(),
+			Field:  fld,
+		},
+	}
+}
+
+type WaitingTurnMsg struct {
+	GameID string     `json:"game_id"`
+	Field  game.Field `json:"game_field"`
+}
+
+func newGameFinishedWinMsg(id gameID, fld game.Field) *Msg {
+	return &Msg{
+		Kind: GameFinishedKind,
+		Data: GameFinishedMsg{GameID: id.str(), PlayerWon: true, Field: fld},
+	}
+}
+
+func newGameFinishedDefeatMsg(id gameID, fld game.Field) *Msg {
+	return &Msg{
+		Kind: GameFinishedKind,
+		Data: GameFinishedMsg{GameID: id.str(), PlayerWon: false, Field: fld},
+	}
+}
+
+func newGameFinishedDrawMsg(id gameID, fld game.Field) *Msg {
+	return &Msg{
+		Kind: GameFinishedKind,
+		Data: GameFinishedMsg{GameID: id.str(), PlayerWon: false, IsDraw: true, Field: fld},
+	}
+}
+
+func newGameFinishedDisconnectMsg(id gameID, fld game.Field) *Msg {
+	return &Msg{
+		Kind: GameFinishedKind,
+		Data: GameFinishedMsg{GameID: id.str(), OpponentDisconect: true, Field: fld},
+	}
+}
+
+type GameFinishedMsg struct {
+	GameID            string     `json:"game_id"`
+	PlayerWon         bool       `json:"player_won"`
+	IsDraw            bool       `json:"is_draw"`
+	OpponentDisconect bool       `json:"opponent_disconect"`
+	Field             game.Field `json:"game_field"`
+}
+
+func newErrorMsg(kind, desc string) *Msg {
+	return &Msg{
+		Kind: kind,
+		Data: ErrorMsg{
+			Desc: desc,
+		},
+	}
+}
+
+// add fields?
+type ErrorMsg struct {
+	Desc string `json:"desc"`
+}
+
 func serializeMsg(msg *Msg) ([]byte, error) {
 	var (
 		data []byte
@@ -72,7 +151,7 @@ func serializeMsg(msg *Msg) ([]byte, error) {
 	return data, nil
 }
 
-func deserializeMsg(raw []byte) (*Msg, error) {
+func DeserializeMsg(raw []byte) (*Msg, error) {
 	var (
 		m   *Msg
 		err error
@@ -83,26 +162,6 @@ func deserializeMsg(raw []byte) (*Msg, error) {
 	}
 
 	return m, nil
-}
-
-func NewMakeTurnMsg(cellIndex int, gameID string) *Msg {
-	logger.Debug().
-		Int("cell_index", cellIndex).
-		Str("game_id", gameID).
-		Msg("[debug] make turn msg")
-
-	return &Msg{
-		Kind: MakeTurnKind,
-		Data: &MakeTurnMsg{
-			CellIndex: cellIndex,
-			GameID:    gameID,
-		},
-	}
-}
-
-type MakeTurnMsg struct {
-	CellIndex int    `json:"cell_index"`
-	GameID    string `json:"game_id"`
 }
 
 type msgFactory interface {
@@ -133,10 +192,10 @@ func (m *serverMsgFactory) make(raw []byte) (*Msg, error) {
 	case MakeTurnKind:
 		return m.makeTurnMsg(msg.Data)
 	case "":
-		return nil, ErrEmptyMsgKind
+		return nil, errEmptyMsgKind
 	}
 
-	return nil, ErrUnsupportedMsgKind
+	return nil, errUnsupportedMsgKind
 }
 
 func (m *serverMsgFactory) makePlayerRdyMsg() (*Msg, error) {

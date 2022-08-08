@@ -36,10 +36,13 @@ type Game struct {
 	tm      *turnManager
 }
 
+type State int
+
 type TurnResult struct {
-	IsFinal bool
-	Err     error
-	Winner  player.Player
+	IsFinal    bool
+	State      State
+	WinnerName string
+	Err        error
 }
 
 func (g *Game) MakeTurn(cellIndex int, playerName string) TurnResult {
@@ -58,8 +61,8 @@ func (g *Game) MakeTurn(cellIndex int, playerName string) TurnResult {
 		return TurnResult{Err: err}
 	}
 
-	if g.isWin(playerName) {
-		return g.makeWinResult(playerName)
+	if g.isOver(playerName) {
+		return g.makeFinalResult()
 	}
 
 	return TurnResult{IsFinal: false, Err: nil}
@@ -71,6 +74,22 @@ func (g *Game) GetField() Field {
 		f[i] = d
 	}
 	return f
+}
+
+// make private?
+func (f *Field) InitNone() {
+	for i := 0; i < 9; i++ {
+		f[i] = mark.None
+	}
+}
+
+func (f *Field) hasNone() bool {
+	for _, m := range f {
+		if m == mark.None {
+			return true
+		}
+	}
+	return false
 }
 
 func (g *Game) validateTurn(cellIndex int, playerName string) error {
@@ -108,16 +127,16 @@ func (g *Game) getPlayerMark(name string) mark.Mark {
 }
 
 // return ptr here?
-func (g *Game) getPlayer(name string) player.Player {
-	p, ok := g.players[name]
-	if !ok {
-		return player.Player{}
-	}
+// func (g *Game) getPlayer(name string) player.Player {
+// 	p, ok := g.players[name]
+// 	if !ok {
+// 		return player.Player{}
+// 	}
 
-	return *p
-}
+// 	return *p
+// }
 
-func (g *Game) isWin(playerName string) bool {
+func (g *Game) isOver(playerName string) bool {
 	if !g.isWinPossible() {
 		return false
 	}
@@ -127,6 +146,7 @@ func (g *Game) isWin(playerName string) bool {
 		m  = g.getPlayerMark(playerName)
 	)
 
+	// make abstraction out of this (strategy pattern or something)
 	for _, winIndexes := range winCombos {
 		var temp string
 
@@ -147,6 +167,10 @@ func (g *Game) isWin(playerName string) bool {
 		}
 	}
 
+	if !g.grid.hasNone() {
+		return true
+	}
+
 	return false
 }
 
@@ -154,12 +178,51 @@ func (g *Game) isWinPossible() bool {
 	return g.tm.currentTurn >= 5
 }
 
-func (g *Game) makeWinResult(playerName string) TurnResult {
-	return TurnResult{
-		IsFinal: true,
-		Err:     nil,
-		Winner:  g.getPlayer(playerName),
+// review
+func (g *Game) makeFinalResult() TurnResult {
+	winner, mark, found := g.getWinnerName()
+	if !found {
+		return TurnResult{IsFinal: true, State: Draw, WinnerName: "", Err: nil}
 	}
+
+	return TurnResult{IsFinal: true, State: getGameState(mark), WinnerName: winner, Err: nil}
+}
+
+// review
+func (g *Game) getWinnerName() (string, mark.Mark, bool) {
+	var in = g.grid.data
+
+	// make abstraction out of this (strategy pattern or something)
+	for _, winIndexes := range winCombos {
+		var temp string
+
+		for _, winIndex := range winIndexes {
+			temp += string(in[winIndex])
+		}
+
+		if len(temp) != 3 {
+			continue
+		}
+
+		switch temp {
+		case winX:
+			return g.getPlayerNameByMark(mark.X), mark.X, true
+		case winO:
+			return g.getPlayerNameByMark(mark.O), mark.O, true
+		}
+	}
+
+	return "", mark.None, false
+}
+
+func (g *Game) getPlayerNameByMark(m mark.Mark) string {
+	for _, pl := range g.players {
+		if m == pl.Mark {
+			return pl.Name
+		}
+	}
+
+	return ""
 }
 
 func newGrid() *grid {
@@ -186,6 +249,10 @@ func (g *grid) isEligiblePlacement(i int, m mark.Mark) error {
 		return ErrCellOccupied
 	}
 	return nil
+}
+
+func (g *grid) hasNone() bool {
+	return g.data.hasNone()
 }
 
 func newTurnManager() *turnManager {
@@ -224,10 +291,13 @@ func (t *turnManager) switchNextMark() {
 	}
 }
 
-// move up?
-// make private?
-func (f *Field) InitNone() {
-	for i := 0; i < 9; i++ {
-		f[i] = mark.None
+func getGameState(m mark.Mark) State {
+	switch m {
+	case mark.X:
+		return WinX
+	case mark.O:
+		return WinO
 	}
+
+	return 0
 }

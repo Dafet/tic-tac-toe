@@ -55,10 +55,6 @@ func consoleSample() {
 			logger.Fatal().Err(result.Err).Msg("error making turn as p1")
 		}
 
-		if result.IsFinal {
-			finish <- result.Winner
-		}
-
 		drawGrid(g.GetField())
 
 		logger.Info().Msg("waiting for player2 cell index: ")
@@ -78,7 +74,7 @@ func consoleSample() {
 		drawGrid(g.GetField())
 
 		if result.IsFinal {
-			finish <- result.Winner
+			// finish <- result.Winner
 		}
 	}
 }
@@ -106,7 +102,7 @@ func debugVersion() {
 		}
 
 		if result.IsFinal {
-			logger.Info().Msgf("game is finished, winner: %+v", result.Winner)
+			// logger.Info().Msgf("game is finished, winner: %+v", result.Winner)
 		}
 
 		drawGrid(g.GetField())
@@ -124,7 +120,7 @@ func debugVersion() {
 		drawGrid(g.GetField())
 
 		if result.IsFinal {
-			logger.Info().Msgf("game is finished, winner: %+v", result.Winner)
+			// logger.Info().Msgf("game is finished, winner: %+v", result.Winner)
 		}
 	}
 }

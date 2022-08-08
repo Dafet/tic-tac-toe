@@ -2,57 +2,20 @@ package ws
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/url"
+	"reflect"
 
 	"github.com/gorilla/websocket"
 )
-
-// todo: websocket.CloseMessage <- use me
 
 type Connection struct {
 	c *websocket.Conn
 }
 
-// todo: make buffer chan as return?
-// Msg type as a return?
-func (c *Connection) ListenForServer() <-chan *Msg {
-	// todo:
-	// - make proper graceful shutdown?
-	// - add logs?
-
-	// process interrupt?
-	// interrupt := make(chan os.Signal, 1)
-	// signal.Notify(interrupt, os.Interrupt)
-
-	msgChan := make(chan *Msg)
-
-	go func() {
-		defer close(msgChan)
-		for {
-			logger.Debug().Msg("reading from server conn")
-
-			// websocket.TextMessage
-			_, raw, err := c.c.ReadMessage()
-			// logger.Debug().Msgf("type is %v", t)
-
-			if err != nil {
-				// todo: what to do in case of errors
-				logger.Warn().Err(err).Msg("error reading msg from server")
-				break
-			}
-
-			msg, err := deserializeMsg(raw)
-			if err != nil {
-				logger.Error().Err(err).Msg("error reading server msg")
-				continue
-			}
-
-			msgChan <- msg
-		}
-	}()
-
-	return msgChan
+func (c *Connection) ReadMessage() (mt int, data []byte, err error) {
+	return c.c.ReadMessage()
 }
 
 func (c *Connection) SendMsg(m *Msg) error {
@@ -69,54 +32,34 @@ func (c *Connection) Close() error {
 		return nil
 	}
 
-	// todo: review func
+	msg := websocket.FormatCloseMessage(websocket.CloseNormalClosure, "normal closure")
+	err := c.c.WriteMessage(websocket.CloseMessage, msg)
 
-	// msg := []byte("interrupt signal")
-
-	// err := c.c.WriteMessage(websocket.CloseNormalClosure, msg)
-
-	// websocket.FormatCloseMessage()
-
-	// if err != nil {
-	// 	return fmt.Errorf(`error sending CloseNormalClosure msg: %w`, err)
-	// }
-
-	// cm := websocket.FormatCloseMessage(websocket.CloseNormalClosure, "add your message here")
-	if err := c.c.WriteMessage(websocket.CloseMessage, []byte("normal close")); err != nil {
-		// handle error
-		logger.Error().Err(err).Msg("error writing close msg before closing connection")
+	if err != nil {
+		return err
 	}
 
-	return c.c.Close()
+	return nil
 }
 
-// review
+func IsCloseError(err error) bool {
+	close := websocket.IsCloseError(err, websocket.CloseMessage, websocket.CloseNormalClosure)
+	return close
+}
+
 func Connect(addr string) (*Connection, error) {
-	// flag.Parse()
-	// log.SetFlags(0)
-
-	// validate addr
-
-	// playerQuery := fmt.Sprintf("%s=%s", playerNameParam, playerName)
-
 	u := url.URL{
 		Scheme: "ws",
 		Host:   addr,
 		Path:   upgradeConnHandlerPath,
 	}
-	// log.Printf("connecting to %s", u.String())
 
 	c, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
 	if err != nil {
 		return &Connection{}, err
 	}
-	// defer c.Close()
 
-	conn := Connection{
-		c: c,
-	}
-
-	return &conn, nil
+	return &Connection{c: c}, nil
 }
 
 // review double marshal
@@ -132,4 +75,39 @@ func MakeGameStartMsg(msg *Msg) (*GameStartMsg, error) {
 	}
 
 	return dest, nil
+}
+
+func MakeWaitingTurnMsg(msg *Msg) (*WaitingTurnMsg, error) {
+	var dest WaitingTurnMsg
+	if err := makeConcreteMsg(msg, &dest); err != nil {
+		return &WaitingTurnMsg{}, err
+	}
+
+	return &dest, nil
+}
+
+func MakeGameFinishedMsg(msg *Msg) (*GameFinishedMsg, error) {
+	var dest GameFinishedMsg
+	if err := makeConcreteMsg(msg, &dest); err != nil {
+		return &GameFinishedMsg{}, err
+	}
+
+	return &dest, nil
+}
+
+func makeConcreteMsg(msg *Msg, dest interface{}) error {
+	if reflect.TypeOf(dest).Kind() != reflect.Ptr {
+		return errors.New(`dest must be a pointer`)
+	}
+
+	raw, err := json.Marshal(msg.Data)
+	if err != nil {
+		return fmt.Errorf(`error marshaling: %w`, err)
+	}
+
+	if err = json.Unmarshal(raw, &dest); err != nil {
+		return fmt.Errorf(`error unmarshaling: %w`, err)
+	}
+
+	return nil
 }

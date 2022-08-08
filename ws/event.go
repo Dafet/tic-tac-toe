@@ -9,5 +9,23 @@ type playerMatchedEvent struct {
 }
 
 type gameFinishedEvent struct {
-	gameID string
+	gameID     gameID
+	isDraw     bool
+	winnerID   string
+	defeatedID string
+}
+
+type waitingTurnEvent struct {
+	gameID           gameID
+	turnMadeByPlayer string
+}
+
+type invalidCellIndexEvent struct {
+	cellIndex int
+	connID    string
+	desc      string
+}
+
+type clientDisconnectEvent struct {
+	connID string
 }

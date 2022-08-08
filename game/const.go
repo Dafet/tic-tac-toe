@@ -2,6 +2,15 @@ package game
 
 import "tic-tac-toe/game/mark"
 
+const (
+	Player1Mark = mark.X
+	Player2Mark = mark.O
+
+	WinX State = iota + 1
+	WinO
+	Draw
+)
+
 var (
 	// to win a game certain indexes should be matched with below ones
 	winComboRow1      = []int{0, 1, 2}
@@ -19,9 +28,6 @@ var (
 )
 
 const (
-	Player1Mark = mark.X
-	Player2Mark = mark.O
-
 	winX = "xxx"
 	winO = "ooo"
 )
