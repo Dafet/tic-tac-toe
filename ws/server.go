@@ -240,6 +240,10 @@ func (s *Server) processGameFinishedEvent(e gameFinishedEvent) {
 	if err = s.handler.sendMsg(e.defeatedID, defeatMsg); err != nil {
 		logger.Error().Err(err).Msg("error sending defeat msg")
 	}
+
+	if err = s.gm.finishGame(e.gameID); err != nil {
+		logger.Error().Err(err).Msg("error finishing game")
+	}
 }
 
 func (s *Server) processClientDisconnectEvent(e clientDisconnectEvent) {
@@ -260,7 +264,7 @@ func (s *Server) processClientDisconnectEvent(e clientDisconnectEvent) {
 	g, found := s.gm.getGameByPlayer(e.connID)
 	if found {
 		anotherPlayer := g.getAnotherPlayerID(e.connID)
-		dcMsg := newGameFinishedDisconnectMsg(g.id, g.game.GetField())
+		dcMsg := newGameFinishedDisconnectMsg(g.id, g.game.GetGridCopy())
 
 		if err = s.handler.sendMsg(anotherPlayer, dcMsg); err != nil {
 			logger.Error().Err(err).Msg("error sending finish msg")

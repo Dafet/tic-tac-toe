@@ -12,7 +12,7 @@ import (
 type gameManager interface {
 	startGame(p1, p2 string) gameID
 	processTurn(id gameID, cellIndex int, playerID string) error
-	getGameField(id gameID) (game.Field, bool)
+	getGameField(id gameID) (game.Grid, bool)
 	getAnotherPlayerID(id gameID, playerID string) (string, bool)
 	getGameByID(id gameID) (internalGame, bool)
 	getGameByPlayer(playerID string) (internalGame, bool)
@@ -111,16 +111,16 @@ func (m *gameManagerInMem) processTurn(id gameID, cellIndex int, playerID string
 	return nil
 }
 
-func (m *gameManagerInMem) getGameField(id gameID) (game.Field, bool) {
+func (m *gameManagerInMem) getGameField(id gameID) (game.Grid, bool) {
 	m.gmu.Lock()
 	defer m.gmu.Unlock()
 
 	g, ok := m.gameList[id]
 	if !ok {
-		return game.Field{}, false
+		return game.Grid{}, false
 	}
 
-	return g.game.GetField(), true
+	return g.game.GetGridCopy(), true
 }
 
 func (m *gameManagerInMem) getAnotherPlayerID(id gameID, playerID string) (string, bool) {

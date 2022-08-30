@@ -43,7 +43,8 @@ func (c *Connection) Close() error {
 }
 
 func IsCloseError(err error) bool {
-	close := websocket.IsCloseError(err, websocket.CloseMessage, websocket.CloseNormalClosure)
+	codes := []int{websocket.CloseMessage, websocket.CloseNormalClosure, websocket.CloseGoingAway}
+	close := websocket.IsCloseError(err, codes...)
 	return close
 }
 

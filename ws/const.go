@@ -25,11 +25,11 @@ const (
 	playerNameParam        = "player_name"
 
 	// server kinds.
-	connKind        = "connection"
-	playerRdyKind   = "play-ready"
-	disconnectKind  = "disconnect"
-	testKind        = "test"
-	setUserDataKind = "set-user-data"
+	connKind          = "connection"
+	playerRdyKind     = "play-ready"
+	disconnectKind    = "disconnect"
+	testKind          = "test"
+	setPlayerDataKind = "set-player-data"
 )
 
 var (

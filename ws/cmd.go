@@ -28,7 +28,7 @@ func (s *serverCmdFactory) make(connID string, msg *Msg) (cmd, error) {
 	}
 
 	switch msg.Kind {
-	case setUserDataKind:
+	case setPlayerDataKind:
 		return s.makeSetPlayerDataCmd(connID, msg)
 	case playerRdyKind:
 		return s.makePlayerRdyCmd(connID)

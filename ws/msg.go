@@ -18,7 +18,7 @@ type Msg struct {
 
 func NewSetUserDataMsg(name string) *Msg {
 	return &Msg{
-		Kind: setUserDataKind,
+		Kind: setPlayerDataKind,
 		Data: SetUserDataMsg{NewName: name},
 	}
 }
@@ -73,55 +73,55 @@ type MakeTurnMsg struct {
 	GameID    string `json:"game_id"`
 }
 
-func newWaitingTurnMsg(id gameID, fld game.Field) *Msg {
+func newWaitingTurnMsg(id gameID, gr game.Grid) *Msg {
 	return &Msg{
 		Kind: WaitingTurnKind,
 		Data: WaitingTurnMsg{
 			GameID: id.str(),
-			Field:  fld,
+			Grid:   gr,
 		},
 	}
 }
 
 type WaitingTurnMsg struct {
-	GameID string     `json:"game_id"`
-	Field  game.Field `json:"game_field"`
+	GameID string    `json:"game_id"`
+	Grid   game.Grid `json:"game_grid"`
 }
 
-func newGameFinishedWinMsg(id gameID, fld game.Field) *Msg {
+func newGameFinishedWinMsg(id gameID, fld game.Grid) *Msg {
 	return &Msg{
 		Kind: GameFinishedKind,
 		Data: GameFinishedMsg{GameID: id.str(), PlayerWon: true, Field: fld},
 	}
 }
 
-func newGameFinishedDefeatMsg(id gameID, fld game.Field) *Msg {
+func newGameFinishedDefeatMsg(id gameID, fld game.Grid) *Msg {
 	return &Msg{
 		Kind: GameFinishedKind,
 		Data: GameFinishedMsg{GameID: id.str(), PlayerWon: false, Field: fld},
 	}
 }
 
-func newGameFinishedDrawMsg(id gameID, fld game.Field) *Msg {
+func newGameFinishedDrawMsg(id gameID, fld game.Grid) *Msg {
 	return &Msg{
 		Kind: GameFinishedKind,
 		Data: GameFinishedMsg{GameID: id.str(), PlayerWon: false, IsDraw: true, Field: fld},
 	}
 }
 
-func newGameFinishedDisconnectMsg(id gameID, fld game.Field) *Msg {
+func newGameFinishedDisconnectMsg(id gameID, fld game.Grid) *Msg {
 	return &Msg{
 		Kind: GameFinishedKind,
-		Data: GameFinishedMsg{GameID: id.str(), OpponentDisconect: true, Field: fld},
+		Data: GameFinishedMsg{GameID: id.str(), OpponentDisconnect: true, Field: fld},
 	}
 }
 
 type GameFinishedMsg struct {
-	GameID            string     `json:"game_id"`
-	PlayerWon         bool       `json:"player_won"`
-	IsDraw            bool       `json:"is_draw"`
-	OpponentDisconect bool       `json:"opponent_disconect"`
-	Field             game.Field `json:"game_field"`
+	GameID             string    `json:"game_id"`
+	PlayerWon          bool      `json:"player_won"`
+	IsDraw             bool      `json:"is_draw"`
+	OpponentDisconnect bool      `json:"opponent_disconnect"`
+	Field              game.Grid `json:"game_grid"`
 }
 
 func newErrorMsg(kind, desc string) *Msg {
@@ -185,7 +185,7 @@ func (m *serverMsgFactory) make(raw []byte) (*Msg, error) {
 	// somehow compile player id based on conn id?
 
 	switch msg.Kind {
-	case setUserDataKind:
+	case setPlayerDataKind:
 		return m.makeSetUserDataMsg(msg.Data)
 	case playerRdyKind:
 		return m.makePlayerRdyMsg()
@@ -214,7 +214,7 @@ func (m *serverMsgFactory) makeSetUserDataMsg(data interface{}) (*Msg, error) {
 		return nil, fmt.Errorf(`error unmarshaling data: %w`, err)
 	}
 
-	return &Msg{Kind: setUserDataKind, Data: dest}, nil
+	return &Msg{Kind: setPlayerDataKind, Data: dest}, nil
 }
 
 func (m *serverMsgFactory) makeTurnMsg(data interface{}) (*Msg, error) {

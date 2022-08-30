@@ -1,14 +1,20 @@
 package game
 
-import "tic-tac-toe/game/mark"
+import (
+	"errors"
+	"tic-tac-toe/game/mark"
+)
+
+var (
+	ErrCellOccupied    = errors.New(`cell is already occupied`)
+	ErrWrongPlayerTurn = errors.New(`invalid player turn: waiting for another player to make a turn`)
+	ErrUnknownPlayer   = errors.New(`unknown player`)
+	ErrInvalidIndex    = errors.New(`invalid cell index: must be in range 0 - 8`)
+)
 
 const (
 	Player1Mark = mark.X
 	Player2Mark = mark.O
-
-	WinX State = iota + 1
-	WinO
-	Draw
 )
 
 var (

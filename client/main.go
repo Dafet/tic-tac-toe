@@ -26,7 +26,7 @@ var (
 	playerName = ""
 
 	conn       *ws.Connection
-	gameFld    game.Field
+	grid       = game.NewGrid()
 	gameID     string
 	playerMark mark.Mark
 )
@@ -41,8 +41,6 @@ func main() {
 		logger.Fatal().Err(err).Msg("error establishing connection")
 	}
 	defer conn.Close()
-
-	gameFld.InitNone()
 
 	go initInterruptSignal()
 
@@ -78,7 +76,7 @@ func main() {
 			fmt.Println("game id: ", gameID)
 			fmt.Println("mark   : ", playerMark)
 
-			drawGrid(gameFld)
+			drawGrid(grid)
 
 			if msg.FirstTurn {
 				fmt.Println("you are making turn, write cell index (1-9)")
@@ -93,7 +91,7 @@ func main() {
 				logger.Fatal().Err(err).Msg("error asserting game msg")
 			}
 
-			gameFld = msg.Field
+			grid = msg.Grid
 			redrawGameData()
 
 			fmt.Println("you are making turn, write cell index (1-9)")
@@ -114,7 +112,7 @@ func main() {
 				logger.Fatal().Err(err).Msg("error asserting game msg")
 			}
 
-			gameFld = msg.Field
+			grid = msg.Field
 			redrawGameData()
 
 			switch {
@@ -122,7 +120,7 @@ func main() {
 				fmt.Println("game is over, you won!")
 			case msg.IsDraw:
 				fmt.Println("game is over, draw")
-			case msg.OpponentDisconect:
+			case msg.OpponentDisconnect:
 				fmt.Println("game is over, your opponent has disconnected")
 			default:
 				fmt.Println("game is over, you have been defeated")
@@ -132,13 +130,6 @@ func main() {
 		default:
 			logger.Info().Msgf("received from server: %+v", m)
 		}
-
-		// time.Sleep(time.Millisecond * 500)
-
-		// - check msg type
-		// 	- if (start game) : draw board
-
-		// if msg type is start game -> initiate game start?
 	}
 
 	fmt.Println("thanks for playing!")
@@ -226,12 +217,11 @@ func sendRdyMsg(conn *ws.Connection, name string) {
 	}
 }
 
-func drawGrid(fld game.Field) {
-
+func drawGrid(g game.Grid) {
 	b := strings.Builder{}
 	defer b.Reset()
 
-	for i, mark := range fld {
+	for i, mark := range grid {
 		if (i+3)%3 == 0 {
 			b.WriteString("\n")
 		}
@@ -269,12 +259,12 @@ func processTurn(m mark.Mark) error {
 		break
 	}
 
-	if placedMark := gameFld[cellIndex]; placedMark != mark.None {
+	if placedMark := grid[cellIndex]; placedMark != mark.None {
 		fmt.Printf("cell is already occupied with [%s], place another mark \n", m.Str())
 		return processTurn(m)
 	}
 
-	gameFld[cellIndex] = m
+	grid[cellIndex] = m
 
 	msg := ws.NewMakeTurnMsg(cellIndex, gameID)
 	err := conn.SendMsg(msg)
@@ -304,7 +294,7 @@ func processRetryGame() {
 	}
 
 	if input == "y" {
-		gameFld.InitNone()
+		grid = game.NewGrid()
 		sendRdyMsg(conn, playerName)
 		linuxClear()
 
@@ -324,7 +314,7 @@ func redrawGameData() {
 
 	fmt.Println("game id: ", gameID)
 	fmt.Println("mark: ", playerMark)
-	drawGrid(gameFld)
+	drawGrid(grid)
 }
 
 func linuxClear() {

@@ -1,21 +1,18 @@
 package game
 
 import (
-	"errors"
+	"fmt"
 	"tic-tac-toe/game/mark"
 	"tic-tac-toe/game/player"
 )
 
-// - add more verbose errors?
-
-var (
-	ErrCellOccupied    = errors.New(`cell is already occupied`)
-	ErrWrongPlayerTurn = errors.New(`invalid player turn: waiting for another player to make a turn`)
-	ErrUnknownPlayer   = errors.New(`unknown player`)
-	ErrInvalidIndex    = errors.New(`invalid cell index: must be in range 0 - 8`)
+const (
+	WinX State = iota + 1
+	WinO
+	Draw
 )
 
-type Field [9]mark.Mark
+type State int
 
 func Start(p1Name, p2Name string) *Game {
 	players := make(map[string]*player.Player)
@@ -25,24 +22,15 @@ func Start(p1Name, p2Name string) *Game {
 
 	return &Game{
 		players: players,
-		grid:    newGrid(),
+		grid:    NewGrid(),
 		tm:      newTurnManager(),
 	}
 }
 
 type Game struct {
 	players map[string]*player.Player
-	grid    *grid
-	tm      *turnManager
-}
-
-type State int
-
-type TurnResult struct {
-	IsFinal    bool
-	State      State
-	WinnerName string
-	Err        error
+	grid    Grid
+	tm      *turnController
 }
 
 func (g *Game) MakeTurn(cellIndex int, playerName string) TurnResult {
@@ -68,23 +56,22 @@ func (g *Game) MakeTurn(cellIndex int, playerName string) TurnResult {
 	return TurnResult{IsFinal: false, Err: nil}
 }
 
-func (g *Game) GetField() Field {
-	f := Field{}
-	for i, d := range g.grid.data {
-		f[i] = d
-	}
-	return f
+type TurnResult struct {
+	IsFinal    bool
+	State      State
+	WinnerName string
+	Err        error
 }
 
-// make private?
-func (f *Field) InitNone() {
-	for i := 0; i < 9; i++ {
-		f[i] = mark.None
-	}
+func (g *Game) GetGridCopy() Grid {
+	fmt.Printf("[debug] current grid: %+v \n", g.grid)
+
+	cp := g.grid
+	return cp
 }
 
-func (f *Field) hasNone() bool {
-	for _, m := range f {
+func (g Grid) hasNoneMarks() bool {
+	for _, m := range g {
 		if m == mark.None {
 			return true
 		}
@@ -142,7 +129,7 @@ func (g *Game) isOver(playerName string) bool {
 	}
 
 	var (
-		in = g.grid.data
+		in = g.grid
 		m  = g.getPlayerMark(playerName)
 	)
 
@@ -167,7 +154,7 @@ func (g *Game) isOver(playerName string) bool {
 		}
 	}
 
-	if !g.grid.hasNone() {
+	if !g.grid.hasNoneMarks() {
 		return true
 	}
 
@@ -190,7 +177,7 @@ func (g *Game) makeFinalResult() TurnResult {
 
 // review
 func (g *Game) getWinnerName() (string, mark.Mark, bool) {
-	var in = g.grid.data
+	var in = g.grid
 
 	// make abstraction out of this (strategy pattern or something)
 	for _, winIndexes := range winCombos {
@@ -225,56 +212,57 @@ func (g *Game) getPlayerNameByMark(m mark.Mark) string {
 	return ""
 }
 
-func newGrid() *grid {
-	fld := Field{}
-	fld.InitNone()
-	return &grid{data: fld}
+func NewGrid() Grid {
+	g := Grid{}
+	for i := range g {
+		g[i] = mark.None
+	}
+	return g
 }
 
-type grid struct {
-	data Field
-}
+type Grid [9]mark.Mark
 
-func (g *grid) placeMark(i int, m mark.Mark) error {
-	g.data[i] = m
+func (g *Grid) placeMark(i int, m mark.Mark) error {
+	g[i] = m
 	return nil
 }
 
-func (g *grid) isEligiblePlacement(i int, m mark.Mark) error {
-	if i > len(Field{})-1 {
+func (g Grid) isEligiblePlacement(i int, m mark.Mark) error {
+	if i < 0 || i > g.getMaxIndexValue() {
 		return ErrInvalidIndex
 	}
 
-	if g.data[i] != mark.None {
+	if g[i] != mark.None {
 		return ErrCellOccupied
 	}
+
 	return nil
 }
 
-func (g *grid) hasNone() bool {
-	return g.data.hasNone()
+func (g Grid) getMaxIndexValue() int {
+	return len(g) - 1
 }
 
-func newTurnManager() *turnManager {
-	return &turnManager{
+func newTurnManager() *turnController {
+	return &turnController{
 		currentTurn: 0,
 		nextMark:    Player1Mark,
 	}
 }
 
-type turnManager struct {
+type turnController struct {
 	nextMark    mark.Mark
 	currentTurn int
 }
 
-func (t *turnManager) makeTurn(m mark.Mark) error {
+func (t *turnController) makeTurn(m mark.Mark) error {
 	t.currentTurn++
 	t.switchNextMark()
 
 	return nil
 }
 
-func (t *turnManager) validateTurn(m mark.Mark) error {
+func (t *turnController) validateTurn(m mark.Mark) error {
 	if m != t.nextMark {
 		return ErrWrongPlayerTurn
 	}
@@ -282,7 +270,7 @@ func (t *turnManager) validateTurn(m mark.Mark) error {
 	return nil
 }
 
-func (t *turnManager) switchNextMark() {
+func (t *turnController) switchNextMark() {
 	switch t.nextMark {
 	case Player1Mark:
 		t.nextMark = Player2Mark
