@@ -3,6 +3,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"os"
 	"os/exec"
@@ -16,28 +17,28 @@ import (
 	"time"
 )
 
-const (
-	defaultAddr = "localhost:8080"
-)
-
 var (
 	logger = log.NewDefaultZerolog()
 
 	playerName = ""
 
-	conn       *ws.Connection
-	grid       = game.NewGrid()
-	gameID     string
+	conn   *ws.Connection
+	grid   = game.NewGrid()
+	gameID string
+
 	playerMark mark.Mark
+	addr       = "localhost:8080"
 )
 
 func init() {
+	flag.StringVar(&addr, "addr", "localhost:8080", "set address to the websocket server")
+	flag.Parse()
 	linuxClear()
 }
 
 func main() {
 	var err error
-	if conn, err = ws.Connect(defaultAddr); err != nil {
+	if conn, err = ws.Connect(addr); err != nil {
 		logger.Fatal().Err(err).Msg("error establishing connection")
 	}
 	defer conn.Close()
