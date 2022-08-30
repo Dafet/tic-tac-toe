@@ -1,7 +1,6 @@
 package game
 
 import (
-	"fmt"
 	"tic-tac-toe/game/mark"
 	"tic-tac-toe/game/player"
 )
@@ -64,8 +63,6 @@ type TurnResult struct {
 }
 
 func (g *Game) GetGridCopy() Grid {
-	fmt.Printf("[debug] current grid: %+v \n", g.grid)
-
 	cp := g.grid
 	return cp
 }
