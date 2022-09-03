@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tic Tac Toe game</title>
+
+    <link rel="stylesheet" href="styles.css">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
+</head>
+
+<body>
+    <main>
+        <div class="container">
+            <button id="start-btn" class="start-text" onkeydown="processStartFocus(this)">start game</button>
+        </div>
+
+        <p id="status-text"></p>
+
+        <div id="grid-container" class="grid">
+            <div id="cell-0" class="cell btn">-</div>
+            <div id="cell-1" class="cell btn">-</div>
+            <div id="cell-2" class="cell btn">-</div>
+            <div id="cell-3" class="cell btn">-</div>
+            <div id="cell-4" class="cell btn">-</div>
+            <div id="cell-5" class="cell btn">-</div>
+            <div id="cell-6" class="cell btn">-</div>
+            <div id="cell-7" class="cell btn">-</div>
+            <div id="cell-8" class="cell btn">-</div>
+        </div>
+
+        <div id="finish-popup">
+            <div class="finish-popup-content">
+                <span class="close">&times;</span>
+                <h1 class="finish-text"> </h1>
+
+                <div class="container">
+                    <button id="again-btn" class="start-text" onkeydown="processStartFocus(this)">play again</button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <footer>
+        <a class="git" href="https://github.com/Dafet/tic-tac-toe">source code</a>
+    </footer>
+
+</body>
+
+
+<script src="websocket.js"></script>
+<script src="grid.js"></script>
+<script src="main.js"></script>
+<script src="utils.js"></script>
+
+</html>
