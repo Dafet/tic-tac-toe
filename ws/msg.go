@@ -12,20 +12,20 @@ import (
 // msgs can be server or client only - separate through pkgs?
 
 type Msg struct {
-	Kind string
+	Type string
 	Data interface{}
 }
 
 func NewSetUserDataMsg(name string) *Msg {
 	return &Msg{
-		Kind: setPlayerDataKind,
+		Type: setPlayerDataType,
 		Data: SetUserDataMsg{NewName: name},
 	}
 }
 
 func NewPlayerRdyMsg(name string) *Msg {
 	return &Msg{
-		Kind: playerRdyKind,
+		Type: playerRdyType,
 	}
 }
 
@@ -43,7 +43,7 @@ func newGameStartMsg(firstTurn bool, id string) *Msg {
 	}
 
 	return &Msg{
-		Kind: GameStartKind,
+		Type: GameStartType,
 		Data: GameStartMsg{
 			FirstTurn: firstTurn,
 			GameID:    id,
@@ -60,7 +60,7 @@ type GameStartMsg struct {
 
 func NewMakeTurnMsg(cellIndex int, gameID string) *Msg {
 	return &Msg{
-		Kind: MakeTurnKind,
+		Type: MakeTurnType,
 		Data: &MakeTurnMsg{
 			CellIndex: cellIndex,
 			GameID:    gameID,
@@ -75,7 +75,7 @@ type MakeTurnMsg struct {
 
 func newWaitingTurnMsg(id gameID, gr game.Grid) *Msg {
 	return &Msg{
-		Kind: WaitingTurnKind,
+		Type: WaitingTurnType,
 		Data: WaitingTurnMsg{
 			GameID: id.str(),
 			Grid:   gr,
@@ -90,28 +90,28 @@ type WaitingTurnMsg struct {
 
 func newGameFinishedWinMsg(id gameID, fld game.Grid) *Msg {
 	return &Msg{
-		Kind: GameFinishedKind,
+		Type: GameFinishedType,
 		Data: GameFinishedMsg{GameID: id.str(), PlayerWon: true, Field: fld},
 	}
 }
 
 func newGameFinishedDefeatMsg(id gameID, fld game.Grid) *Msg {
 	return &Msg{
-		Kind: GameFinishedKind,
+		Type: GameFinishedType,
 		Data: GameFinishedMsg{GameID: id.str(), PlayerWon: false, Field: fld},
 	}
 }
 
 func newGameFinishedDrawMsg(id gameID, fld game.Grid) *Msg {
 	return &Msg{
-		Kind: GameFinishedKind,
+		Type: GameFinishedType,
 		Data: GameFinishedMsg{GameID: id.str(), PlayerWon: false, IsDraw: true, Field: fld},
 	}
 }
 
 func newGameFinishedDisconnectMsg(id gameID, fld game.Grid) *Msg {
 	return &Msg{
-		Kind: GameFinishedKind,
+		Type: GameFinishedType,
 		Data: GameFinishedMsg{GameID: id.str(), OpponentDisconnect: true, Field: fld},
 	}
 }
@@ -126,7 +126,7 @@ type GameFinishedMsg struct {
 
 func newErrorMsg(kind, desc string) *Msg {
 	return &Msg{
-		Kind: kind,
+		Type: kind,
 		Data: ErrorMsg{
 			Desc: desc,
 		},
@@ -184,22 +184,22 @@ func (m *serverMsgFactory) make(raw []byte) (*Msg, error) {
 
 	// somehow compile player id based on conn id?
 
-	switch msg.Kind {
-	case setPlayerDataKind:
+	switch msg.Type {
+	case setPlayerDataType:
 		return m.makeSetUserDataMsg(msg.Data)
-	case playerRdyKind:
+	case playerRdyType:
 		return m.makePlayerRdyMsg()
-	case MakeTurnKind:
+	case MakeTurnType:
 		return m.makeTurnMsg(msg.Data)
 	case "":
-		return nil, errEmptyMsgKind
+		return nil, errEmptyMsgType
 	}
 
-	return nil, errUnsupportedMsgKind
+	return nil, errUnsupportedMsgType
 }
 
 func (m *serverMsgFactory) makePlayerRdyMsg() (*Msg, error) {
-	return &Msg{Kind: playerRdyKind}, nil
+	return &Msg{Type: playerRdyType}, nil
 }
 
 func (m *serverMsgFactory) makeSetUserDataMsg(data interface{}) (*Msg, error) {
@@ -214,7 +214,7 @@ func (m *serverMsgFactory) makeSetUserDataMsg(data interface{}) (*Msg, error) {
 		return nil, fmt.Errorf(`error unmarshaling data: %w`, err)
 	}
 
-	return &Msg{Kind: setPlayerDataKind, Data: dest}, nil
+	return &Msg{Type: setPlayerDataType, Data: dest}, nil
 }
 
 func (m *serverMsgFactory) makeTurnMsg(data interface{}) (*Msg, error) {
@@ -229,5 +229,5 @@ func (m *serverMsgFactory) makeTurnMsg(data interface{}) (*Msg, error) {
 		return nil, fmt.Errorf(`error unmarshaling data: %w`, err)
 	}
 
-	return &Msg{Kind: MakeTurnKind, Data: dest}, nil
+	return &Msg{Type: MakeTurnType, Data: dest}, nil
 }

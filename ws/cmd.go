@@ -27,18 +27,18 @@ func (s *serverCmdFactory) make(connID string, msg *Msg) (cmd, error) {
 		return nil, errors.New(`msg is nil`)
 	}
 
-	switch msg.Kind {
-	case setPlayerDataKind:
+	switch msg.Type {
+	case setPlayerDataType:
 		return s.makeSetPlayerDataCmd(connID, msg)
-	case playerRdyKind:
+	case playerRdyType:
 		return s.makePlayerRdyCmd(connID)
 		// do nothing here
-	// case GameStartKind:
-	case MakeTurnKind:
+	// case GameStartType:
+	case MakeTurnType:
 		return s.makeMakeTurnCmd(connID, msg, s.s.eventCh)
 	}
 
-	return nil, fmt.Errorf(`unknown msg kind: %s`, msg.Kind)
+	return nil, fmt.Errorf(`unknown msg Type: %s`, msg.Type)
 }
 
 func (s *serverCmdFactory) makeSetPlayerDataCmd(connID string, msg *Msg) (setPlayerDataCmd, error) {

@@ -20,24 +20,24 @@ ws.setOnMsgCallback(function (e) {
 
     console.log("[debug] got server msg:", data);
 
-    switch (data.Kind) {
+    switch (data.Type) {
         // process game finished due to another player disconnect!
-        case serverKind.GAME_START:
-            processGameStartKind(msgData);
+        case serverType.GAME_START:
+            processGameStartType(msgData);
             break;
-        case serverKind.WAITING_TURN:
+        case serverType.WAITING_TURN:
             processWaitingTurnKing(msgData);
             break;
-        case serverKind.ERR_CELL_OCCUPIED:
+        case serverType.ERR_CELL_OCCUPIED:
             console.log("[error] got server ERR_CELL_OCCUPIED error");
             break;
-        case serverKind.GAME_FINISHED:
-            processGameFinishedKind(msgData);
+        case serverType.GAME_FINISHED:
+            processGameFinishedType(msgData);
             break;
     }
 });
 
-function processGameStartKind(data) {
+function processGameStartType(data) {
     console.log("[info] starting game with id %s...",
         data.game_id)
 
@@ -68,7 +68,7 @@ function processWaitingTurnKing(data) {
     grid.draw();
 }
 
-function processGameFinishedKind(data) {
+function processGameFinishedType(data) {
     if (data.opponent_disconnect) {
         console.log("[debug] opponent has disconected");
     }

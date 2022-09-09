@@ -6,7 +6,7 @@
 
 ### Словарь:
 
-- `kind` - типы сообщений:
+- `type` - типы сообщений:
     - посылаемые сервером:
         - `game-start` - начало игры.
         - `waiting-player-turn` - ожидание хода игрока (идентификация игрока производится сервером на основании websocket коннекта)
@@ -34,7 +34,7 @@
 
 ```json
 {
-    "kind":"play-ready"
+    "type":"play-ready"
 }
 ```
 
@@ -44,7 +44,7 @@
 
 ```json
 {
-    "kind":"game-start",
+    "type":"game-start",
     "data":{
         "first_turn":true,
         "game_id":"some-game-id",
@@ -62,7 +62,7 @@
 
 ```json
 {
-    "kind":"make-turn",
+    "type":"make-turn",
     "data":{
         "cell_index":0,
         "game_id":"some-game-id"
@@ -80,7 +80,7 @@
 
 ```json
 {
-    "kind":"waiting-player-turn",
+    "type":"waiting-player-turn",
     "data":{
         "game_id":"some-game-id",
         "game_grid":["x","-","-","-","-","-","-","-","-"]
@@ -97,7 +97,7 @@
 
 ```json
 {
-    "kind":"game-finished",
+    "type":"game-finished",
     "data":{
         "game_id":"some-game-id",
         "player_won":true,

@@ -69,8 +69,8 @@ func main() {
 			break
 		}
 
-		switch m.Kind {
-		case ws.GameStartKind:
+		switch m.Type {
+		case ws.GameStartType:
 			msg, err := ws.MakeGameStartMsg(m)
 			if err != nil {
 				logger.Fatal().Err(err).Msg("error asserting game msg")
@@ -92,7 +92,7 @@ func main() {
 			}
 
 			fmt.Println("waiting for another player to make a turn...")
-		case ws.WaitingTurnKind:
+		case ws.WaitingTurnType:
 			msg, err := ws.MakeWaitingTurnMsg(m)
 			if err != nil {
 				logger.Fatal().Err(err).Msg("error asserting game msg")
@@ -107,13 +107,13 @@ func main() {
 
 			redrawGameData()
 			fmt.Println("waiting for another player to make a turn...")
-		case ws.ErrCellOccupiedKind:
+		case ws.ErrCellOccupiedType:
 			fmt.Println("cell is already occupied, choose another")
 
 			processTurn(playerMark)
 
 			redrawGameData()
-		case ws.GameFinishedKind:
+		case ws.GameFinishedType:
 			msg, err := ws.MakeGameFinishedMsg(m)
 			if err != nil {
 				logger.Fatal().Err(err).Msg("error asserting game msg")

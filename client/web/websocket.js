@@ -1,12 +1,13 @@
-const wsURL = "ws://185.195.27.142:8080/conn"
+// const wsURL = "ws://185.195.27.142:8080/conn"
+const wsURL = "ws://localhost:8080/conn"
 
-const kind = {
+const type = {
     SET_PLAYER_DATA: "set-player-data",
     PLAY_RDY: "play-ready",
     MAKE_TURN: "make-turn",
 }
 
-const serverKind = {
+const serverType = {
     GAME_START: "game-start",
     WAITING_TURN: "waiting-player-turn",
     ERR_CELL_OCCUPIED: "cell-occupied",
@@ -43,7 +44,7 @@ class WsConn {
 class Msg {
     makeSetPlayerName(name) {
         const data = {
-            kind: kind.SET_PLAYER_DATA,
+            type: type.SET_PLAYER_DATA,
             data: {
                 new_name: name
             }
@@ -53,14 +54,14 @@ class Msg {
 
     makePlayerRdyMsg() {
         const data = {
-            kind: kind.PLAY_RDY
+            type: type.PLAY_RDY
         }
         return JSON.stringify(data)
     }
 
     makeMakeTurnMsg(cellID, gameID) {
         const data = {
-            kind: kind.MAKE_TURN,
+            type: type.MAKE_TURN,
             data: {
                 cell_index: cellID, game_id: gameID
             }

@@ -5,11 +5,11 @@ import "errors"
 // clear here
 
 const (
-	GameStartKind       = "game-start"
-	MakeTurnKind        = "make-turn"
-	WaitingTurnKind     = "waiting-player-turn"
-	ErrCellOccupiedKind = "cell-occupied"
-	GameFinishedKind    = "game-finished"
+	GameStartType       = "game-start"
+	MakeTurnType        = "make-turn"
+	WaitingTurnType     = "waiting-player-turn"
+	ErrCellOccupiedType = "cell-occupied" // redundant?
+	GameFinishedType    = "game-finished"
 )
 
 var (
@@ -24,16 +24,16 @@ const (
 	port                   = ":8080"
 	playerNameParam        = "player_name"
 
-	// server kinds.
-	connKind          = "connection"
-	playerRdyKind     = "play-ready"
-	disconnectKind    = "disconnect"
-	testKind          = "test"
-	setPlayerDataKind = "set-player-data"
+	// server types.
+	connType          = "connection"
+	playerRdyType     = "play-ready"
+	disconnectType    = "disconnect"
+	testType          = "test"
+	setPlayerDataType = "set-player-data"
 )
 
 var (
-	errUnsupportedMsgKind = errors.New(`unsupported msg kind`)
-	errEmptyMsgKind       = errors.New(`empty msg kind`)
+	errUnsupportedMsgType = errors.New(`unsupported msg type`)
+	errEmptyMsgType       = errors.New(`empty msg type`)
 	errGameNotFound       = errors.New(`game is not found`)
 )

@@ -181,16 +181,16 @@ func (s *Server) processWaitingForTurnEvent(e waitingTurnEvent) {
 	err := s.handler.sendMsg(playerID, m)
 	if err != nil {
 		// how to process correctly - retry logic?
-		logger.Error().Err(err).Msgf("error sending '%s' msg", WaitingTurnKind)
+		logger.Error().Err(err).Msgf("error sending '%s' msg", WaitingTurnType)
 	}
 }
 
 func (s *Server) processInvalidCellIndexEvent(e invalidCellIndexEvent) {
-	m := newErrorMsg(ErrCellOccupiedKind, e.desc)
+	m := newErrorMsg(ErrCellOccupiedType, e.desc)
 	err := s.handler.sendMsg(e.connID, m)
 	if err != nil {
 		// how to process correctly - retry logic?
-		logger.Error().Err(err).Msgf("error sending '%s' msg", WaitingTurnKind)
+		logger.Error().Err(err).Msgf("error sending '%s' msg", WaitingTurnType)
 	}
 }
 
