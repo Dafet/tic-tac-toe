@@ -70,7 +70,7 @@ function processWaitingTurnKing(data) {
 
 function processGameFinishedType(data) {
     if (data.opponent_disconnect) {
-        console.log("[debug] opponent has disconected");
+        console.log("[debug] opponent has disconnected");
     }
 
     grid.elems = data.game_grid;

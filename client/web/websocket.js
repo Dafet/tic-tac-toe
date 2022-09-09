@@ -1,5 +1,4 @@
-// const wsURL = "ws://185.195.27.142:8080/conn"
-const wsURL = "ws://localhost:8080/conn"
+const wsURL = "ws://185.195.27.142:8080/conn"
 
 const type = {
     SET_PLAYER_DATA: "set-player-data",

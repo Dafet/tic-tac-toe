@@ -113,7 +113,7 @@ function setDrawFinishText() {
 
 function setDisconnectFinishText() {
     const text = document.getElementsByClassName("finish-text")[0];
-    text.innerHTML = 'game finished: <span style="color: #2c697d;">opponent disconected</span>'
+    text.innerHTML = 'game finished: <span style="color: #2c697d;">opponent disconnected</span>'
 }
 
 function runFinishPopup() {
