@@ -28,6 +28,7 @@ type Zerolog struct {
 	redirectSTDLogger bool
 	rootInitialized   bool
 	showCaller        bool
+	timeFormat        string
 }
 
 var Default *Zerolog
@@ -48,6 +49,7 @@ func NewDefaultZerolog() *Zerolog {
 	logger.level = defaultZeroCfg.Level
 	logger.prettyPrint = defaultZeroCfg.PrettyPrint
 	logger.showCaller = defaultZeroCfg.ShowCaller
+	logger.timeFormat = defaultZeroCfg.TimeFieldFormat
 	logger.compileLogger()
 
 	return &logger
@@ -55,7 +57,7 @@ func NewDefaultZerolog() *Zerolog {
 
 var defaultZeroCfg = ZeroConfig{
 	Level:           "debug",
-	TimeFieldFormat: time.RFC3339,
+	TimeFieldFormat: time.StampMilli,
 	PrettyPrint:     true,
 	ErrorStack:      false,
 	ShowCaller:      false,
@@ -139,8 +141,8 @@ func (l *Zerolog) initDefaultFields() {
 }
 
 func (l *Zerolog) addPrettyPrint() {
-	prettyStdout := zerolog.ConsoleWriter{Out: os.Stdout}
-	prettyStderr := zerolog.ConsoleWriter{Out: os.Stderr}
+	prettyStdout := zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: l.timeFormat}
+	prettyStderr := zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: l.timeFormat}
 
 	l.zero = l.zero.Output(prettyStdout)
 	l.zeroErr = l.zeroErr.Output(prettyStderr)
