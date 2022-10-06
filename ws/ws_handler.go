@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	pingInterval = time.Second * 5
+	pingInterval = time.Second * 10
 	pingDeadline = pingInterval
 )
 
