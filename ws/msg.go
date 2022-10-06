@@ -33,21 +33,24 @@ type SetUserDataMsg struct {
 	NewName string `json:"new_name"`
 }
 
-// private?
-func newGameStartMsg(firstTurn bool, id string) *Msg {
-	var mark mark.Mark
-	if firstTurn {
-		mark = game.Player1Mark
-	} else {
-		mark = game.Player2Mark
-	}
-
+func newGameStartP1Msg(id string) *Msg {
 	return &Msg{
 		Type: GameStartType,
 		Data: GameStartMsg{
-			FirstTurn: firstTurn,
+			FirstTurn: true,
 			GameID:    id,
-			Mark:      mark,
+			Mark:      game.Player1Mark,
+		},
+	}
+}
+
+func newGameStartP2Msg(id string) *Msg {
+	return &Msg{
+		Type: GameStartType,
+		Data: GameStartMsg{
+			FirstTurn: false,
+			GameID:    id,
+			Mark:      game.Player2Mark,
 		},
 	}
 }

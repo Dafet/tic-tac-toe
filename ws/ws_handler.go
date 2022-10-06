@@ -2,16 +2,23 @@
 package ws
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
 	"reflect"
 	"sync"
+	"time"
 
 	"github.com/gorilla/websocket"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/lithammer/shortuuid"
 	"github.com/rs/zerolog"
+)
+
+const (
+	pingInterval = time.Second * 15
+	pingDeadline = pingInterval
 )
 
 // TODO: implement ping, pong
@@ -30,14 +37,17 @@ func newWsHandler(eventCh chan interface{}) *wsHandler {
 	}
 }
 
+type playerData struct {
+	wsconn Connection
+	name   string
+}
+
 type wsHandler struct {
-	// conns map[string]*websocket.Conn
 	conns      map[string]*playerData
 	eventCh    chan interface{}
 	playerLock sync.Mutex
 }
 
-// todo: add separate async func?
 func (h *wsHandler) startHandle() {
 	http.HandleFunc(upgradeConnHandlerPath, h.upgradeConn)
 	logger.Info().Msgf("websoket server is listening on %s 🔥", port)
@@ -47,7 +57,6 @@ func (h *wsHandler) startHandle() {
 	}
 }
 
-// todo: rename + rewrite (too many responsibilities and operations)
 func (h *wsHandler) upgradeConn(w http.ResponseWriter, r *http.Request) {
 	c, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -56,20 +65,32 @@ func (h *wsHandler) upgradeConn(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintln(w, errMsg)
 	}
 
-	// defer connection.Close() // move
-
-	go func() {
-		connID := h.storeConn(c, "") // review playerName param.
-		logger := logger.With().Str("conn_id", connID).Logger()
-
-		logger.Info().Msg("listening for conn")
-		h.readClientMsgs(connID, logger)
-		logger.Info().Msg("stop listening for conn")
-
-		h.flushConn(connID)
-	}()
+	h.handleConnection(c)
 }
 
+func (h *wsHandler) handleConnection(c *websocket.Conn) {
+	var (
+		connID      = h.storeConn(c, "")
+		logger      = logger.With().Str("conn_id", connID).Logger()
+		ctx, cancel = context.WithCancel(context.Background())
+		conn        = &Connection{c: c}
+	)
+
+	wsPinger{c: conn, logger: logger, cancel: cancel}.startPing()
+	conn.c.SetCloseHandler(func(code int, text string) error {
+		h.eventCh <- clientDisconnectEvent{connID: connID}
+		h.flushConn(connID)
+		return nil
+	})
+
+	logger.Info().Msg("listening for conn")
+	h.readClientMsgs(connID, logger, ctx)
+	logger.Info().Msg("stop listening for conn")
+
+	h.flushConn(connID)
+}
+
+// review playerName param.
 func (h *wsHandler) storeConn(c *websocket.Conn, playerName string) (key string) {
 	connKey := shortuuid.New()
 	h.conns[connKey] = &playerData{
@@ -79,58 +100,68 @@ func (h *wsHandler) storeConn(c *websocket.Conn, playerName string) (key string)
 	return connKey
 }
 
-func (h *wsHandler) readClientMsgs(connID string, logger zerolog.Logger) error {
-	conn, ok := h.conns[connID]
+type wsConnMsgData struct {
+	msgType int
+	raw     []byte
+	err     error
+}
+
+func listenWsConnMsgs(pd *playerData) chan *wsConnMsgData {
+	msgCh := make(chan *wsConnMsgData)
+
+	go func() {
+		for {
+			mt, raw, err := pd.wsconn.ReadRawMessage()
+
+			logger.Info().
+				Str("msg_raw", string(raw)).
+				Int("websocket_msg_type", mt).
+				Msg("[incoming] client's msg")
+
+			msgCh <- &wsConnMsgData{msgType: mt, raw: raw, err: err}
+		}
+	}()
+
+	return msgCh
+}
+
+func (h *wsHandler) readClientMsgs(connID string, logger zerolog.Logger, ctx context.Context) error {
+	pd, ok := h.conns[connID]
 	if !ok {
 		return errors.New(`connection is not established`)
 	}
 
-	var readErr error
+	msgs := listenWsConnMsgs(pd)
 
-outer:
 	for {
-		mt, msgRaw, err := conn.wsconn.ReadMessage()
+		select {
+		case md := <-msgs:
+			if md.err != nil {
+				return md.err
+			}
 
-		logger.Info().
-			Str("msg_raw", string(msgRaw)).
-			Int("websocket_msg_type", mt).
-			Msg("[incoming] client's msg")
+			msg, err := msgfactory.make(md.raw)
+			if err != nil {
+				logger.Error().Err(err).Msg("error compiling msg")
+				continue
+			}
 
-		switch {
-		case IsCloseError(err):
-			h.eventCh <- clientDisconnectEvent{connID: connID}
+			cmd, err := cmdfactory.make(connID, msg)
+			if err != nil {
+				logger.Error().Err(err).Msg("error creating cmd")
+				continue
+			}
+
+			logger.Info().Str("cmd_name", reflect.TypeOf(cmd).Name()).Msg("applying command")
+
+			if err = cmd.apply(); err != nil {
+				logger.Error().Err(err).Msg("error applying cmd")
+				continue
+			}
+		case <-ctx.Done():
 			return nil
-		case err != nil:
-			logger.Error().Err(err).Msg("error reading client msg, finish listening")
-			readErr = err
-			break outer
-		}
-
-		msg, err := msgfactory.make(msgRaw)
-		if err != nil {
-			logger.Error().Err(err).Msg("error compiling msg")
-			continue
-		}
-
-		cmd, err := cmdfactory.make(connID, msg)
-		if err != nil {
-			logger.Error().Err(err).Msg("error creating cmd")
-			continue
-		}
-
-		logger.Info().Str("cmd_name", reflect.TypeOf(cmd).Name()).Msg("applying command")
-
-		if err = cmd.apply(); err != nil {
-			logger.Error().Err(err).Msg("error applying cmd")
-			continue
 		}
 	}
-
-	if readErr != nil {
-		return readErr
-	}
-
-	return nil
 }
 
 func (h *wsHandler) getPlayerDataPtr(connID string) (*playerData, bool) {
@@ -149,6 +180,26 @@ func (h *wsHandler) getPlayerDataPtr(connID string) (*playerData, bool) {
 	return p, true
 }
 
+func (h *wsHandler) sendMsg(connID string, msg *Msg) error {
+	c, ok := h.conns[connID]
+	if !ok {
+		return errors.New(`connID is not found`)
+	}
+
+	msgRaw, err := jsoniter.Marshal(msg)
+	if err != nil {
+		logger.Error().Err(err).Msg("error marshaling msg for logging")
+	}
+
+	logger.Info().
+		Str("conn_id", connID).
+		Str("msg_raw", string(msgRaw)).
+		Int("websocket_msg_type", websocket.TextMessage). // hardcoded text msg
+		Msg("[outgoing] sending msg to client")
+
+	return c.wsconn.SendMsg(msg)
+}
+
 func (h *wsHandler) flushConn(key string) error {
 	conn, ok := h.conns[key]
 	if !ok {
@@ -164,29 +215,40 @@ func (h *wsHandler) flushConn(key string) error {
 	return nil
 }
 
-func (h *wsHandler) sendMsg(connID string, msg *Msg) error {
-	c, ok := h.conns[connID]
-	if !ok {
-		return errors.New(`connID is not found`)
-	}
-
-	msgRaw, err := jsoniter.Marshal(msg)
-	if err != nil {
-		logger.Error().Err(err).Msg("error marshaling msg for logging")
-	}
-
-	logger.Info().
-		Str("conn_id", connID).
-		Str("msg_raw", string(msgRaw)).
-		Int("websocket_msg_type", websocket.TextMessage). // hardcoded
-		Msg("[outgoing] sending msg to client")
-
-	return c.wsconn.SendMsg(msg)
+type wsPinger struct {
+	c      *Connection
+	logger zerolog.Logger
+	cancel context.CancelFunc
 }
 
-// move up?
-type playerData struct {
-	// wsconn *websocket.Conn
-	wsconn Connection
-	name   string
+func (p wsPinger) startPing() {
+	go func() {
+		time.Sleep(time.Second * 5)
+
+		pingOk := make(chan struct{})
+
+		p.c.SetPongHandler(func(appData string) error {
+			pingOk <- struct{}{}
+			return nil
+		})
+
+		for {
+			time.Sleep(pingInterval)
+
+			p.ping()
+
+			select {
+			case <-pingOk:
+				continue
+			case <-time.After(pingDeadline):
+				p.logger.Info().Msgf("ping exceeds deadline: %s, cancelling", pingDeadline.String())
+				p.cancel()
+				return
+			}
+		}
+	}()
+}
+
+func (p wsPinger) ping() {
+	go p.c.c.WriteControl(websocket.PingMessage, nil, time.Now().Add(time.Second*5))
 }

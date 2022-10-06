@@ -3,6 +3,7 @@ package ws
 import (
 	"fmt"
 	log "tic-tac-toe/logger"
+	"time"
 
 	"github.com/gorilla/websocket"
 )
@@ -23,7 +24,6 @@ var (
 	logger     = log.NewDefaultZerolog()
 	msgfactory msgFactory
 	cmdfactory cmdFactory
-	// mmengine   MatchmakingEngine // initialize with empty mm engine?
 )
 
 func New() *Server {
@@ -84,14 +84,14 @@ func (s *Server) initMatchmaking() {
 }
 
 func (s *Server) initGameManager() {
-	s.gm = newGameManagerInMem(s.eventCh)
+	s.gm = newInMemGameManager(s.eventCh)
 }
 
 // process errors!
 func (s *Server) sendGameStartMsgs(m PlayerMatch, id gameID) error {
 	var (
-		m1  = newGameStartMsg(true, id.str())
-		m2  = newGameStartMsg(false, id.str())
+		m1  = newGameStartP1Msg(id.str())
+		m2  = newGameStartP2Msg(id.str())
 		err error
 	)
 
@@ -109,7 +109,7 @@ func (s *Server) sendGameStartMsgs(m PlayerMatch, id gameID) error {
 }
 
 // test func
-func (s *Server) BroadcastMsg(msg *Msg) {
+func (s *Server) TestBroadcastMsg(msg *Msg) {
 	for _, v := range s.handler.conns {
 		b, err := serializeMsg(msg)
 		if err != nil {
@@ -121,42 +121,67 @@ func (s *Server) BroadcastMsg(msg *Msg) {
 }
 
 // test func
-func (s *Server) LogConns() {
+func (s *Server) TestLogConns() {
 	for _, v := range s.handler.conns {
 		logger.Debug().Msg("currently connected: " + v.name)
 	}
 }
 
+// test func
+func (s *Server) TestPingLoop() {
+	for {
+		time.Sleep(time.Second * 1)
+
+		for _, v := range s.handler.conns {
+			err := v.wsconn.c.WriteControl(websocket.PingMessage, nil, time.Now().Add(time.Second*2))
+			logger.Debug().Msgf("result err: %+v", err)
+		}
+	}
+}
+
 func (s *Server) startEventLoop() {
 	for {
-		// start async func here for every event push?
 		i := <-s.eventCh
+
 		switch e := i.(type) {
 		case testEvent:
 			logger.Debug().Msg("got test event: " + e.data)
-		case playerMatchedEvent: // pack into separate func?
-			logger.Info().
-				Str("player_1", e.m.Player1ID).
-				Str("player_2", e.m.Player2ID).
-				Msg("match is found, starting game")
-
-			id := s.gm.startGame(e.m.Player1ID, e.m.Player2ID)
-
-			if err := s.sendGameStartMsgs(e.m, id); err != nil {
-				// try something here?
-				logger.Error().Err(err).Msg("error sending start game msg")
-			}
+		case playerMatchedEvent:
+			go s.processPlayerMatchedEvent(e)
 		case invalidCellIndexEvent:
-			s.processInvalidCellIndexEvent(e)
+			go s.processInvalidCellIndexEvent(e)
 		case waitingTurnEvent:
-			s.processWaitingForTurnEvent(e)
+			go s.processWaitingForTurnEvent(e)
 		case gameFinishedEvent:
-			s.processGameFinishedEvent(e)
+			go s.processGameFinishedEvent(e)
 		case clientDisconnectEvent:
-			s.processClientDisconnectEvent(e)
+			go s.processClientDisconnectEvent(e)
 		default:
 			logger.Error().Msgf("unknown event type: %+v", e)
 		}
+	}
+}
+
+func (s *Server) processPlayerMatchedEvent(e playerMatchedEvent) {
+	logger.Info().
+		Str("player_1", e.m.Player1ID).
+		Str("player_2", e.m.Player2ID).
+		Msg("match is found, starting game")
+
+	id := s.gm.startGame(e.m.Player1ID, e.m.Player2ID)
+
+	if err := s.sendGameStartMsgs(e.m, id); err != nil {
+		// try something here?
+		logger.Error().Err(err).Msg("error sending start game msg")
+	}
+}
+
+func (s *Server) processInvalidCellIndexEvent(e invalidCellIndexEvent) {
+	m := newErrorMsg(ErrCellOccupiedType, e.desc)
+	err := s.handler.sendMsg(e.connID, m)
+	if err != nil {
+		// how to process correctly - retry logic?
+		logger.Error().Err(err).Msgf("error sending '%s' msg", WaitingTurnType)
 	}
 }
 
@@ -179,15 +204,6 @@ func (s *Server) processWaitingForTurnEvent(e waitingTurnEvent) {
 
 	m := newWaitingTurnMsg(e.gameID, fld)
 	err := s.handler.sendMsg(playerID, m)
-	if err != nil {
-		// how to process correctly - retry logic?
-		logger.Error().Err(err).Msgf("error sending '%s' msg", WaitingTurnType)
-	}
-}
-
-func (s *Server) processInvalidCellIndexEvent(e invalidCellIndexEvent) {
-	m := newErrorMsg(ErrCellOccupiedType, e.desc)
-	err := s.handler.sendMsg(e.connID, m)
 	if err != nil {
 		// how to process correctly - retry logic?
 		logger.Error().Err(err).Msgf("error sending '%s' msg", WaitingTurnType)

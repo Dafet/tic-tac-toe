@@ -15,6 +15,8 @@ import (
 	log "tic-tac-toe/logger"
 	"tic-tac-toe/ws"
 	"time"
+
+	"github.com/lithammer/shortuuid"
 )
 
 var (
@@ -28,6 +30,8 @@ var (
 
 	playerMark mark.Mark
 	addr       = ""
+
+	finishApp = make(chan struct{})
 )
 
 func init() {
@@ -49,9 +53,11 @@ func main() {
 	}
 	defer conn.Close()
 
-	go initInterruptSignal()
+	go listenInterrupt()
+	go processFinishApp()
 
 	playerName = mustGetPlayerName()
+	fmt.Println("temp player name is: " + playerName)
 
 	go sendSetPlayerDataMsg(conn, playerName)
 	time.Sleep(time.Millisecond * 30)
@@ -147,20 +153,22 @@ func main() {
 }
 
 func listenForServer() <-chan *ws.Msg {
-	// todo:
-	// - make proper graceful shutdown?
-	// - add logs?
-
-	// process interrupt?
-	// interrupt := make(chan os.Signal, 1)
-	// signal.Notify(interrupt, os.Interrupt)
+	conn.SetCloseHandler(func(code int, msg string) error {
+		logger.Debug().Msg("received close msg from server, finishing")
+		finishApp <- struct{}{}
+		return nil
+	})
 
 	msgChan := make(chan *ws.Msg)
 
 	go func() {
 		defer close(msgChan)
 		for {
-			_, raw, err := conn.ReadMessage()
+			_, raw, err := conn.ReadRawMessage()
+
+			if ws.IsCloseError(err) {
+				finishApp <- struct{}{}
+			}
 
 			if err != nil {
 				// todo: what to do in case of errors
@@ -181,31 +189,35 @@ func listenForServer() <-chan *ws.Msg {
 	return msgChan
 }
 
-func initInterruptSignal() {
-	var err error
+func processFinishApp() {
+	<-finishApp
+	logger.Info().Msg("cought finish app signal")
 
-	interrupt := make(chan os.Signal, 1)
-	signal.Notify(interrupt, os.Interrupt)
-
-	<-interrupt
-
-	logger.Info().Msg("cought interrupt signal, finishing")
-
-	if err = conn.Close(); err != nil {
+	if err := conn.Close(); err != nil {
 		logger.Fatal().Err(err).Msg("error closing connection")
 	}
 
 	os.Exit(1)
 }
 
+func listenInterrupt() {
+	interrupt := make(chan os.Signal, 1)
+	signal.Notify(interrupt, os.Interrupt)
+
+	<-interrupt
+	finishApp <- struct{}{}
+}
+
 func mustGetPlayerName() string {
 	var name string
 
 	fmt.Println("enter player's name: ")
-	_, err := fmt.Scanln(&name)
-	if err != nil {
-		logger.Fatal().Err(err).Msg("error reading player's name")
-	}
+	// _, err := fmt.Scanln(&name)
+	// if err != nil {
+	// 	logger.Fatal().Err(err).Msg("error reading player's name")
+	// }
+
+	name = shortuuid.New()
 
 	return name
 }

@@ -25,7 +25,7 @@ func (g gameID) str() string {
 	return string(g)
 }
 
-func newGameManagerInMem(eventCh chan interface{}) *gameManagerInMem {
+func newInMemGameManager(eventCh chan interface{}) *gameManagerInMem {
 	return &gameManagerInMem{
 		gameList:   make(map[gameID]internalGame),
 		playerList: make(map[string]gameID),

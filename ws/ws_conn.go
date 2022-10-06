@@ -14,7 +14,19 @@ type Connection struct {
 	c *websocket.Conn
 }
 
-func (c *Connection) ReadMessage() (mt int, data []byte, err error) {
+func (c *Connection) SetPingHandler(h func(data string) error) {
+	c.c.SetPingHandler(h)
+}
+
+func (c *Connection) SetPongHandler(h func(data string) error) {
+	c.c.SetPongHandler(h)
+}
+
+func (c *Connection) SetCloseHandler(h func(code int, msg string) error) {
+	c.c.SetCloseHandler(h)
+}
+
+func (c *Connection) ReadRawMessage() (mt int, data []byte, err error) {
 	return c.c.ReadMessage()
 }
 
