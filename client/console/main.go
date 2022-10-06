@@ -65,6 +65,8 @@ func main() {
 
 	fmt.Println("looking for a game...")
 
+	fmt.Scanln()
+
 	var msgChan = listenForServer()
 
 	for {

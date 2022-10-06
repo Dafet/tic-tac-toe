@@ -17,12 +17,9 @@ import (
 )
 
 const (
-	pingInterval = time.Second * 15
+	pingInterval = time.Second * 5
 	pingDeadline = pingInterval
 )
-
-// TODO: implement ping, pong
-// add locks for reading (conns)?
 
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
