@@ -1,4 +1,4 @@
-// This is a sample client.
+// This is a sample client for Tic Tac Toe server.
 
 package main
 
@@ -20,18 +20,15 @@ import (
 )
 
 var (
-	logger = log.NewDefaultZerolog()
-
-	playerName = ""
-
-	conn   *ws.Connection
-	grid   = game.NewGrid()
-	gameID string
-
-	playerMark mark.Mark
-	addr       = ""
-
+	logger    = log.NewDefaultZerolog()
 	finishApp = make(chan struct{})
+	addr      = ""
+
+	conn       *ws.Connection
+	grid       = game.NewGrid()
+	gameID     string
+	playerName = shortuuid.New()
+	playerMark mark.Mark
 )
 
 func init() {
@@ -56,16 +53,15 @@ func main() {
 	go listenInterrupt()
 	go processFinishApp()
 
-	playerName = mustGetPlayerName()
-	fmt.Println("temp player name is: " + playerName)
+	fmt.Println("sample player name is: " + playerName)
+	fmt.Println("press any key to continue...")
+	fmt.Scanln()
 
 	go sendSetPlayerDataMsg(conn, playerName)
 	time.Sleep(time.Millisecond * 30)
 	go sendRdyMsg(conn, playerName)
 
 	fmt.Println("looking for a game...")
-
-	fmt.Scanln()
 
 	var msgChan = listenForServer()
 
@@ -148,10 +144,6 @@ func main() {
 	}
 
 	fmt.Println("thanks for playing!")
-
-	// connect to server
-	// send rdy signal
-	// establish msg receive loop
 }
 
 func listenForServer() <-chan *ws.Msg {
@@ -208,20 +200,6 @@ func listenInterrupt() {
 
 	<-interrupt
 	finishApp <- struct{}{}
-}
-
-func mustGetPlayerName() string {
-	var name string
-
-	fmt.Println("enter player's name: ")
-	// _, err := fmt.Scanln(&name)
-	// if err != nil {
-	// 	logger.Fatal().Err(err).Msg("error reading player's name")
-	// }
-
-	name = shortuuid.New()
-
-	return name
 }
 
 func sendSetPlayerDataMsg(conn *ws.Connection, name string) {
@@ -339,7 +317,7 @@ func redrawGameData() {
 }
 
 func linuxClear() {
-	cmd := exec.Command("clear") //Linux example, its tested
+	cmd := exec.Command("clear")
 	cmd.Stdout = os.Stdout
 	cmd.Run()
 }
