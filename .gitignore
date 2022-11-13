@@ -2,3 +2,5 @@
 .vscode
 *.dev
 lab
+.fleet
+.idea
