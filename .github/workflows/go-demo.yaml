@@ -1,9 +1,11 @@
 name: go test demo
-on:
-  push:
-    branches:
-      name:
-        - master
+#on:
+#  push:
+#    branches:
+#      name:
+#        - master
+
+on: [push]
 
 jobs:
   go-test:
